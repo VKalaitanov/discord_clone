@@ -1,0 +1,17 @@
+version: "3.9"
+
+services:
+  web:
+    build: .
+    container_name: voice_chat
+    restart: always
+    ports:
+      - "8000:8000"
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 3G
+    volumes:
+      - ./frontend:/app/frontend
+      - ./static:/app/static

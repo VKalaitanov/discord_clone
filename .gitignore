@@ -1,0 +1,43 @@
+# Игнорировать кэш Python
+__pycache__/
+*.py[cod]
+*$py.class
+.ruff_cache
+
+# Игнорировать виртуальное окружение
+.venv/
+venv/
+env/
+ENV/
+
+# Игнорировать файлы Redis
+redis_data/
+redis_data_dev
+dump.rdb
+
+# Игнорировать файлы IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Игнорировать логи и временные файлы
+*.log
+*.tmp
+*.bak
+
+# Игнорировать файлы зависимостей
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+tests.py
+# Игнорировать файлы сборки
+dist/
+build/
+*.egg-info/
+
+# Игнорировать файлы конфигурации
+.env*
+.pre-commit-config.yaml
+.env
