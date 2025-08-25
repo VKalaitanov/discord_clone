@@ -1,5 +1,6 @@
-// Включи логи, если нужно: window.DEBUG_SPEECH = true;
+// Включи логи
 window.DEBUG_SPEECH = true;
+
 let localStream = null;
 let ws = null;
 let clientId = null;
@@ -7,7 +8,7 @@ let isMuted = false;
 
 const peers = {};
 const peerElements = {};
-const speakingLoops = {}; // чтобы не запускать два монитора на одного пира
+const speakingLoops = {};
 
 const joinBtn  = document.getElementById("join");
 const leaveBtn = document.getElementById("leave");
@@ -16,13 +17,14 @@ const roomInput = document.getElementById("room");
 const peersList = document.getElementById("peersList");
 
 let audioContext;
+
 function getAudioCtx() {
     if (!audioContext) {
         const Ctx = window.AudioContext || window.webkitAudioContext;
         audioContext = new Ctx();
     }
     if (audioContext.state === "suspended") {
-        audioContext.resume();
+        audioContext.resume().then(() => console.debug("AudioContext resumed"));
     }
     return audioContext;
 }
@@ -33,29 +35,26 @@ function wsURL(roomId) {
 }
 
 async function startLocalStream() {
-    // Можно добавить echoCancellation/noiseSuppression по желанию
     localStream = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
     });
 }
 
-/** Детектор речи на RMS с гистерезисом и VU-индикатором */
-function monitorSpeaking(peerId, stream) {
-    if (speakingLoops[peerId]) return; // уже запущен
+function monitorSpeaking(peerId, stream, isLocal=false) {
+    if (speakingLoops[peerId]) return;
 
     const ctx = getAudioCtx();
     const analyser = ctx.createAnalyser();
-    analyser.fftSize = 1024;                 // длина массива для time-domain
-    analyser.smoothingTimeConstant = 0.7;    // сглаживание
+    analyser.fftSize = 1024;
+    analyser.smoothingTimeConstant = 0.7;
+
     const source = ctx.createMediaStreamSource(stream);
     source.connect(analyser);
 
     const data = new Uint8Array(analyser.fftSize);
-
-    const high = 0.045; // порог "заговорил"
-    const low  = 0.020; // порог "замолчал"
+    const high = 0.045, low = 0.020;
     let speaking = false;
-    let aboveCount = 0, belowCount = 0; // гистерезис по кадрам
+    let aboveCount = 0, belowCount = 0;
     let lastLog = 0;
 
     const peerDiv = () => document.getElementById("peer-" + peerId);
@@ -65,29 +64,26 @@ function monitorSpeaking(peerId, stream) {
     function loop(ts) {
         analyser.getByteTimeDomainData(data);
 
-        // RMS в [0..~0.5]
         let sum = 0;
         for (let i = 0; i < data.length; i++) {
             const v = (data[i] - 128) / 128;
             sum += v * v;
         }
         const rms = Math.sqrt(sum / data.length);
+        const level = Math.min(100, Math.round(rms * 2200));
 
-        // шкала для VU (0..100%)
-        const level = Math.min(100, Math.round(rms * 2200)); // эмпирически
         const fill = vuFill();
         if (fill) fill.style.width = level + "%";
 
-        // гистерезис
         if (rms > high) { aboveCount++; belowCount = 0; }
         else if (rms < low) { belowCount++; aboveCount = 0; }
 
-        if (!speaking && aboveCount >= 3) { // 3 подряд (≈50мс)
+        if (!speaking && aboveCount >= 3) {
             speaking = true;
             const el = peerDiv(); const mic = micIcon();
             if (el) el.classList.add("talking");
-            if (mic) mic.style.color = "var(--success)";
-        } else if (speaking && belowCount >= 8) { // 8 подряд (≈130мс)
+            if (mic) mic.style.color = isLocal ? "var(--primary)" : "var(--success)";
+        } else if (speaking && belowCount >= 8) {
             speaking = false;
             const el = peerDiv(); const mic = micIcon();
             if (el) el.classList.remove("talking");
@@ -96,7 +92,6 @@ function monitorSpeaking(peerId, stream) {
 
         if (window.DEBUG_SPEECH && ts - lastLog > 200) {
             lastLog = ts;
-            // Логи не спамят консоль
             console.debug(`[speaking] peer=${peerId} rms=${rms.toFixed(3)} level=${level}% speaking=${speaking}`);
         }
 
@@ -118,22 +113,29 @@ function createPeerConnection(peerId) {
     localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
 
     pc.onicecandidate = e => {
-        if (e.candidate) {
-            ws?.send(JSON.stringify({ type: "candidate", candidate: e.candidate, to: peerId, from: clientId }));
-        }
+        if (e.candidate) ws?.send(JSON.stringify({ type: "candidate", candidate: e.candidate, to: peerId, from: clientId }));
     };
 
     pc.ontrack = e => {
-        let audio = document.getElementById("audio-" + peerId);
-        if (!audio) {
-            audio = document.createElement("audio");
-            audio.id = "audio-" + peerId;
-            audio.autoplay = true;
-            audio.playsInline = true;
-            peersList.appendChild(audio);
-        }
-        audio.srcObject = e.streams[0];
-        monitorSpeaking(peerId, e.streams[0]);
+        e.streams.forEach(stream => {
+            if (stream.getAudioTracks().length === 0) return;
+
+            let audio = document.getElementById("audio-" + peerId);
+            if (!audio) {
+                audio = document.createElement("audio");
+                audio.id = "audio-" + peerId;
+                audio.autoplay = true;
+                audio.playsInline = true;
+                peersList.appendChild(audio);
+            }
+
+            audio.srcObject = null;
+            audio.srcObject = stream;
+            audio.muted = false;
+            audio.onloadedmetadata = () => audio.play().catch(err => console.warn("Autoplay blocked:", err));
+
+            monitorSpeaking(peerId, stream);
+        });
     };
 
     return pc;
@@ -146,7 +148,7 @@ async function sendOffer(peerId) {
     ws?.send(JSON.stringify({ ...offer, to: peerId, from: clientId }));
 }
 
-function addPeerUI(peerId) {
+function addPeerUI(peerId, isLocal=false) {
     if (peerElements[peerId]) return;
     const div = document.createElement("div");
     div.className = "peer";
@@ -158,6 +160,11 @@ function addPeerUI(peerId) {
     `;
     peersList.appendChild(div);
     peerElements[peerId] = div;
+
+    if (isLocal) {
+        // сразу мониторим свой микрофон
+        monitorSpeaking(peerId, localStream, true);
+    }
 }
 
 function removePeerUI(peerId) {
@@ -174,7 +181,7 @@ async function joinRoom() {
     if (!roomId) return alert("Введите Room ID");
 
     await startLocalStream();
-    getAudioCtx(); // гарантируем, что контекст разблокирован кликом
+    getAudioCtx();
 
     ws = new WebSocket(wsURL(roomId));
     ws.onmessage = async evt => {
@@ -183,9 +190,8 @@ async function joinRoom() {
 
         if (type === "id") {
             clientId = msg.id;
-            muteBtn.disabled = true; // включим после получения стрима
-            addPeerUI(clientId);
-            monitorSpeaking(clientId, localStream);
+            muteBtn.disabled = true;
+            addPeerUI(clientId, true);
             muteBtn.disabled = false;
         } else if (type === "new-peer") {
             const newId = msg.id;
@@ -201,9 +207,7 @@ async function joinRoom() {
                 delete peers[leftId];
             }
             removePeerUI(leftId);
-        } else if (from === clientId) {
-            return;
-        }
+        } else if (from === clientId) return;
 
         if (!from) return;
 
