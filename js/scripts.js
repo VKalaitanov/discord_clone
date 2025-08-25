@@ -1,4 +1,4 @@
-// Включи логи
+// Включи логи, если нужно
 window.DEBUG_SPEECH = true;
 
 let localStream = null;
@@ -40,7 +40,7 @@ async function startLocalStream() {
     });
 }
 
-function monitorSpeaking(peerId, stream, isLocal=false) {
+function monitorSpeaking(peerId, stream) {
     if (speakingLoops[peerId]) return;
 
     const ctx = getAudioCtx();
@@ -70,8 +70,8 @@ function monitorSpeaking(peerId, stream, isLocal=false) {
             sum += v * v;
         }
         const rms = Math.sqrt(sum / data.length);
-        const level = Math.min(100, Math.round(rms * 2200));
 
+        const level = Math.min(100, Math.round(rms * 2200));
         const fill = vuFill();
         if (fill) fill.style.width = level + "%";
 
@@ -82,7 +82,7 @@ function monitorSpeaking(peerId, stream, isLocal=false) {
             speaking = true;
             const el = peerDiv(); const mic = micIcon();
             if (el) el.classList.add("talking");
-            if (mic) mic.style.color = isLocal ? "var(--primary)" : "var(--success)";
+            if (mic) mic.style.color = "var(--success)";
         } else if (speaking && belowCount >= 8) {
             speaking = false;
             const el = peerDiv(); const mic = micIcon();
@@ -118,7 +118,10 @@ function createPeerConnection(peerId) {
 
     pc.ontrack = e => {
         e.streams.forEach(stream => {
-            if (stream.getAudioTracks().length === 0) return;
+            if (stream.getAudioTracks().length === 0) {
+                console.warn("Нет аудио-треков для peer", peerId);
+                return;
+            }
 
             let audio = document.getElementById("audio-" + peerId);
             if (!audio) {
@@ -129,10 +132,13 @@ function createPeerConnection(peerId) {
                 peersList.appendChild(audio);
             }
 
+            // Safari fix
             audio.srcObject = null;
             audio.srcObject = stream;
             audio.muted = false;
-            audio.onloadedmetadata = () => audio.play().catch(err => console.warn("Autoplay blocked:", err));
+            audio.onloadedmetadata = () => {
+                audio.play().catch(err => console.warn("Autoplay blocked:", err));
+            };
 
             monitorSpeaking(peerId, stream);
         });
@@ -148,7 +154,7 @@ async function sendOffer(peerId) {
     ws?.send(JSON.stringify({ ...offer, to: peerId, from: clientId }));
 }
 
-function addPeerUI(peerId, isLocal=false) {
+function addPeerUI(peerId) {
     if (peerElements[peerId]) return;
     const div = document.createElement("div");
     div.className = "peer";
@@ -160,11 +166,6 @@ function addPeerUI(peerId, isLocal=false) {
     `;
     peersList.appendChild(div);
     peerElements[peerId] = div;
-
-    if (isLocal) {
-        // сразу мониторим свой микрофон
-        monitorSpeaking(peerId, localStream, true);
-    }
 }
 
 function removePeerUI(peerId) {
@@ -191,7 +192,8 @@ async function joinRoom() {
         if (type === "id") {
             clientId = msg.id;
             muteBtn.disabled = true;
-            addPeerUI(clientId, true);
+            addPeerUI(clientId);
+            monitorSpeaking(clientId, localStream);
             muteBtn.disabled = false;
         } else if (type === "new-peer") {
             const newId = msg.id;
