@@ -33,11 +33,25 @@ function wsURL(roomId) {
 }
 
 async function startLocalStream() {
-    // Можно добавить echoCancellation/noiseSuppression по желанию
+    // Запрашиваем сразу и камеру, и микрофон
     localStream = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+        video: { width: 640, height: 480 } // можно выставить ограничения
     });
+
+    // Создаём локальное видео для отображения себя
+    let localVideo = document.getElementById("localVideo");
+    if (!localVideo) {
+        localVideo = document.createElement("video");
+        localVideo.id = "localVideo";
+        localVideo.autoplay = true;
+        localVideo.muted = true;   // чтобы не слышать самого себя
+        localVideo.playsInline = true;
+        document.getElementById("peersList").appendChild(localVideo);
+    }
+    localVideo.srcObject = localStream;
 }
+
 
 /** Детектор речи на RMS с гистерезисом и VU-индикатором */
 function monitorSpeaking(peerId, stream) {
@@ -124,17 +138,34 @@ function createPeerConnection(peerId) {
     };
 
     pc.ontrack = e => {
-        let audio = document.getElementById("audio-" + peerId);
-        if (!audio) {
-            audio = document.createElement("audio");
-            audio.id = "audio-" + peerId;
-            audio.autoplay = true;
-            audio.playsInline = true;
-            peersList.appendChild(audio);
+        // Проверяем, что пришло: аудио или видео
+        const kind = e.track.kind;
+        const stream = e.streams[0];
+
+        if (kind === "video") {
+            let video = document.getElementById("video-" + peerId);
+            if (!video) {
+                video = document.createElement("video");
+                video.id = "video-" + peerId;
+                video.autoplay = true;
+                video.playsInline = true;
+                document.getElementById("peersList").appendChild(video);
+            }
+            video.srcObject = stream;
+        } else if (kind === "audio") {
+            let audio = document.getElementById("audio-" + peerId);
+            if (!audio) {
+                audio = document.createElement("audio");
+                audio.id = "audio-" + peerId;
+                audio.autoplay = true;
+                audio.playsInline = true;
+                document.getElementById("peersList").appendChild(audio);
+            }
+            audio.srcObject = stream;
+            monitorSpeaking(peerId, stream);
         }
-        audio.srcObject = e.streams[0];
-        monitorSpeaking(peerId, e.streams[0]);
     };
+
 
     return pc;
 }
@@ -165,9 +196,14 @@ function removePeerUI(peerId) {
     const div = peerElements[peerId];
     if (div) div.remove();
     delete peerElements[peerId];
+
     const audio = document.getElementById("audio-" + peerId);
     if (audio) audio.remove();
+
+    const video = document.getElementById("video-" + peerId);
+    if (video) video.remove();
 }
+
 
 async function joinRoom() {
     const roomId = roomInput.value.trim();
