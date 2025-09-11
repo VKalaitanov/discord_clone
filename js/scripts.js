@@ -122,7 +122,10 @@ function createPeerConnection(peerId) {
         const stream = e.streams[0];
         if (e.track.kind === "video") {
             const video = document.getElementById("video-" + peerId);
-            if (video) video.srcObject = stream;
+            if (video) {
+                video.srcObject = stream;
+                video.style.display = stream.getVideoTracks()[0]?.enabled ? "block" : "none";
+            }
         } else if (e.track.kind === "audio") {
             const audio = document.getElementById("audio-" + peerId);
             if (audio) audio.srcObject = stream;
@@ -184,6 +187,9 @@ function addPeerUI(peerId, peersList, isLocal = false) {
             isVideoOff = !isVideoOff;
             localStream.getVideoTracks().forEach(t => t.enabled = !isVideoOff);
             videoBtn.textContent = isVideoOff ? "Включить видео" : "Выключить видео";
+
+            const videoEl = document.getElementById(`video-${peerId}`);
+            if (videoEl) videoEl.style.display = isVideoOff ? "none" : "block";
         });
     }
 }

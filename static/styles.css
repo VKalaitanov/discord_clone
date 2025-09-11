@@ -1,229 +1,136 @@
-window.DEBUG_SPEECH = true;
-let localStream = null;
-let ws = null;
-let clientId = null;
-
-const peers = {};
-const peerElements = {};
-const speakingLoops = {};
-
-document.addEventListener("DOMContentLoaded", () => {
-    const joinBtn  = document.getElementById("join");
-    const leaveBtn = document.getElementById("leave");
-    const roomInput = document.getElementById("room");
-    const peersList = document.getElementById("peersList");
-
-    joinBtn.addEventListener("click", () => joinRoom(roomInput, peersList, joinBtn, leaveBtn));
-    leaveBtn.addEventListener("click", () => leaveRoom(joinBtn, leaveBtn, roomInput));
-});
-
-let audioContext;
-function getAudioCtx() {
-    if (!audioContext) {
-        const Ctx = window.AudioContext || window.webkitAudioContext;
-        audioContext = new Ctx();
-    }
-    if (audioContext.state === "suspended") audioContext.resume();
-    return audioContext;
+:root {
+    --bg: #0f172a;
+    --bg-card: #1e293b;
+    --text: #f1f5f9;
+    --text-muted: #94a3b8;
+    --primary: #3b82f6;
+    --danger: #ef4444;
+    --success: #22c55e;
+    --radius: 14px;
 }
 
-function wsURL(roomId) {
-    const proto = location.protocol === "https:" ? "wss" : "ws";
-    return `${proto}://${location.host}/ws/${roomId}`;
+body {
+    margin: 0; padding: 0;
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    background: var(--bg); color: var(--text);
+    display: flex; flex-direction: column; align-items: center;
+    padding: 24px 12px; min-height: 100vh;
 }
 
-async function startLocalStream() {
-    try {
-        localStream = await navigator.mediaDevices.getUserMedia({
-            audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-            video: { width: 640, height: 480 }
-        });
-    } catch (err) {
-        alert("Не удалось получить доступ к камере или микрофону");
-        console.error(err);
-        return;
-    }
-    return localStream;
+h2 { margin-bottom: 16px; font-size: 24px; font-weight: 600; text-align: center; }
+
+.controls {
+    display: flex; flex-wrap: wrap; gap: 8px;
+    margin-bottom: 24px; justify-content: center;
 }
 
-function monitorSpeaking(peerId, stream) {
-    if (speakingLoops[peerId]) return;
-
-    const ctx = getAudioCtx();
-    const analyser = ctx.createAnalyser();
-    analyser.fftSize = 1024;
-    analyser.smoothingTimeConstant = 0.7;
-    const source = ctx.createMediaStreamSource(stream);
-    source.connect(analyser);
-
-    const data = new Uint8Array(analyser.fftSize);
-    const high = 0.045, low = 0.02;
-    let speaking = false, aboveCount = 0, belowCount = 0, lastLog = 0;
-
-    const peerDiv = () => document.getElementById("peer-" + peerId);
-    const micIcon = () => document.getElementById("mic-" + peerId);
-    const vuFill  = () => document.getElementById("vu-" + peerId);
-
-    function loop(ts) {
-        analyser.getByteTimeDomainData(data);
-        let sum = 0;
-        for (let i = 0; i < data.length; i++) {
-            const v = (data[i]-128)/128;
-            sum += v*v;
-        }
-        const rms = Math.sqrt(sum/data.length);
-        const level = Math.min(100, Math.round(rms*2200));
-        const fill = vuFill();
-        if (fill) fill.style.width = level + "%";
-
-        if (rms > high) { aboveCount++; belowCount=0; }
-        else if (rms < low) { belowCount++; aboveCount=0; }
-
-        if (!speaking && aboveCount>=3) { speaking=true; peerDiv()?.classList.add("talking"); if(micIcon()) micIcon().style.color="var(--success)"; }
-        else if(speaking && belowCount>=8){ speaking=false; peerDiv()?.classList.remove("talking"); if(micIcon()) micIcon().style.color="var(--text-muted)"; }
-
-        if(window.DEBUG_SPEECH && ts-lastLog>200){ lastLog=ts; console.debug(`[speaking] ${peerId} rms=${rms.toFixed(3)} level=${level}% speaking=${speaking}`); }
-
-        speakingLoops[peerId] = requestAnimationFrame(loop);
-    }
-    speakingLoops[peerId] = requestAnimationFrame(loop);
+input {
+    padding: 10px 14px; border-radius: var(--radius);
+    border: 1px solid var(--text-muted);
+    background: var(--bg-card); color: var(--text);
+    font-size: 16px; outline: none;
 }
 
-function stopMonitor(peerId) {
-    if (speakingLoops[peerId]) { cancelAnimationFrame(speakingLoops[peerId]); delete speakingLoops[peerId]; }
+button {
+    padding: 10px 16px; border-radius: var(--radius); border: none;
+    font-size: 16px; cursor: pointer; font-weight: 500;
+    transition: background .2s, transform .1s;
+}
+button:disabled { opacity: .5; cursor: not-allowed; }
+button:active { transform: scale(.96); }
+#join { background: var(--primary); color: #fff; }
+#leave { background: var(--danger); color: #fff; }
+#muteBtn { background: var(--bg-card); color: var(--text); }
+
+#peersList {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 12px; width: 100%; max-width: 820px;
 }
 
-function createPeerConnection(peerId) {
-    const pc = new RTCPeerConnection({ iceServers:[{urls:"stun:stun.l.google.com:19302"}] });
-    localStream.getTracks().forEach(t=>pc.addTrack(t,localStream));
-
-    pc.onicecandidate = e => {
-        if(e.candidate) ws?.send(JSON.stringify({type:"candidate", candidate:e.candidate, to:peerId, from:clientId}));
-    };
-    pc.ontrack = e => {
-        const stream = e.streams[0];
-        if(e.track.kind==="video"){
-            const video = document.getElementById("video-"+peerId);
-            if(video){ video.srcObject=stream; video.play().catch(()=>{}); }
-        } else if(e.track.kind==="audio"){
-            const audio = document.getElementById("audio-"+peerId);
-            if(audio){ audio.srcObject=stream; audio.play().catch(()=>{}); monitorSpeaking(peerId, stream); }
-        }
-    };
-    return pc;
+.peer {
+    position: relative;
+    background: var(--bg-card);
+    border-radius: var(--radius);
+    padding: 16px;
+    display: flex; flex-direction: column; align-items: center; gap: 10px;
+    box-shadow: 0 2px 8px rgba(0,0,0,.4);
+    transition: background .2s, box-shadow .2s;
+    overflow: visible; /* чтобы пульс не обрезался */
 }
 
-async function sendOffer(peerId){
-    const pc=peers[peerId];
-    const offer = await pc.createOffer();
-    await pc.setLocalDescription(offer);
-    ws?.send(JSON.stringify({...offer, to:peerId, from:clientId}));
+.peer-id { font-size: 14px; word-break: break-all; text-align: center; }
+
+.mic {
+    font-size: 22px;
+    transition: color .2s, transform .2s;
 }
 
-function addPeerUI(peerId, peersList, isLocal=false){
-    if(peerElements[peerId]) return;
-
-    const div=document.createElement("div");
-    div.className="peer";
-    div.id="peer-"+peerId;
-
-    div.innerHTML=`
-        <video id="video-${peerId}" autoplay playsinline ${isLocal?"muted":""} style="width:100%;border-radius:14px;"></video>
-        <audio id="audio-${peerId}" autoplay playsinline ${isLocal?"muted":""}></audio>
-        <div class="info">
-            <span class="peer-id">${isLocal?"Вы":peerId}</span>
-            <span class="mic" id="mic-${peerId}">🎤</span>
-            <div class="vu"><div class="fill" id="vu-${peerId}"></div></div>
-        </div>
-        ${isLocal?`
-        <div class="controls">
-            <button id="mute-${peerId}">Выключить микрофон</button>
-            <button id="video-${peerId}-btn">Выключить видео</button>
-        </div>`:""}
-    `;
-    peersList.appendChild(div);
-    peerElements[peerId]=div;
-
-    if(isLocal){
-        const muteBtn=document.getElementById("mute-"+peerId);
-        const videoBtn=document.getElementById("video-"+peerId+"-btn");
-        let isMuted=false, isVideoOff=false;
-
-        muteBtn.addEventListener("click", ()=>{
-            if(!localStream) return;
-            isMuted=!isMuted;
-            localStream.getAudioTracks().forEach(t=>t.enabled=!isMuted);
-            muteBtn.textContent=isMuted?"Включить микрофон":"Выключить микрофон";
-        });
-
-        videoBtn.addEventListener("click", ()=>{
-            if(!localStream) return;
-            isVideoOff=!isVideoOff;
-            localStream.getVideoTracks().forEach(t=>t.enabled=!isVideoOff);
-            videoBtn.textContent=isVideoOff?"Включить видео":"Выключить видео";
-        });
-    }
+/* Пульс и свечение вокруг говорящего */
+.peer.talking {
+    box-shadow:
+      0 0 0 2px rgba(34,197,94,1) inset,
+      0 0 20px 6px rgba(34,197,94,.35);
+}
+.peer.talking::after, .peer.talking::before {
+    content: "";
+    position: absolute;
+    inset: -4px;
+    border-radius: calc(var(--radius) + 4px);
+    border: 2px solid rgba(34,197,94,.9);
+    animation: pulse 1.2s infinite;
+}
+.peer.talking::before {
+    inset: -10px;
+    border-color: rgba(34,197,94,.5);
+    animation-delay: .3s;
 }
 
-async function joinRoom(roomInput, peersList, joinBtn, leaveBtn){
-    const roomId=roomInput.value.trim();
-    if(!roomId) return alert("Введите Room ID");
-
-    await startLocalStream();
-    getAudioCtx();
-
-    ws=new WebSocket(wsURL(roomId));
-    ws.onmessage=async evt=>{
-        const msg=JSON.parse(evt.data);
-        const {type, from, candidate}=msg;
-
-        if(type==="id"){
-            clientId=msg.id;
-            addPeerUI(clientId, peersList, true);
-            const localVideo=document.getElementById("video-"+clientId);
-            if(localVideo){ localVideo.srcObject=localStream; localVideo.play().catch(()=>{}); }
-            const audioStream=new MediaStream(localStream.getAudioTracks());
-            monitorSpeaking(clientId, audioStream);
-        } else if(type==="new-peer"){
-            const newId=msg.id;
-            addPeerUI(newId, peersList);
-            if(!peers[newId]) { peers[newId]=createPeerConnection(newId); sendOffer(newId); }
-        } else if(type==="peer-left"){
-            const leftId=msg.id;
-            if(peers[leftId]){ peers[leftId].close(); delete peers[leftId]; }
-            removePeerUI(leftId);
-        } else if(from===clientId) return;
-
-        if(!from) return;
-        if(!peers[from]) peers[from]=createPeerConnection(from);
-        const pc=peers[from];
-
-        if(type==="offer"){
-            addPeerUI(from, peersList);
-            await pc.setRemoteDescription(new RTCSessionDescription(msg));
-            const answer=await pc.createAnswer();
-            await pc.setLocalDescription(answer);
-            ws?.send(JSON.stringify({...answer, to:from, from:clientId}));
-        } else if(type==="answer"){
-            await pc.setRemoteDescription(new RTCSessionDescription(msg));
-        } else if(type==="candidate"){
-            try{ await pc.addIceCandidate(new RTCIceCandidate(candidate)); }
-            catch(e){ console.error(e); }
-        }
-    };
-
-    joinBtn.disabled=true; leaveBtn.disabled=false; roomInput.disabled=true;
+@keyframes pulse {
+    0%   { transform: scale(1);   opacity: .9; }
+    100% { transform: scale(1.25); opacity: 0; }
 }
 
-function leaveRoom(joinBtn, leaveBtn, roomInput){
-    if(ws){ ws.close(); ws=null; }
-    if(localStream){ localStream.getTracks().forEach(t=>t.stop()); localStream=null; }
-    Object.values(peers).forEach(pc=>pc.close());
-    Object.keys(peers).forEach(k=>delete peers[k]);
-    Object.keys(peerElements).forEach(stopMonitor);
-    peerElements={};
+/* Подпрыгивание и подсветка микрофона у говорящего */
+.peer.talking .mic {
+    color: var(--success);
+    animation: mic-bounce .6s infinite;
+}
+@keyframes mic-bounce {
+    0%,100% { transform: translateY(0) scale(1); }
+    50%     { transform: translateY(-2px) scale(1.1); }
+}
 
-    if(audioContext){ audioContext.close(); audioContext=null; }
+/* Простая VU-шкала */
+.vu {
+    width: 100%; height: 6px;
+    background: rgba(148,163,184,.25);
+    border-radius: 999px; overflow: hidden;
+}
+.vu .fill {
+    height: 100%; width: 0%;
+    background: linear-gradient(90deg, var(--success), var(--primary));
+    transition: width .08s linear;
+}
 
-    joinBtn.disabled=false; leaveBtn.disabled=true; roomInput.disabled=false;
+@media (max-width: 600px) {
+    #peersList { grid-template-columns: 1fr; }
+}
+
+.peer video {
+    width: 100%; /* заполняет родителя */
+    max-width: 160px;
+    aspect-ratio: 4/3;
+    border-radius: var(--radius);
+    background: #000;
+    object-fit: cover;
+}
+
+.peer audio {
+    width: 100%;
+}
+
+@media (max-width: 600px) {
+    #peersList { grid-template-columns: 1fr; gap: 8px; }
+    .peer video { max-width: 100%; aspect-ratio: 4/3; }
 }
