@@ -128,37 +128,22 @@ function createPeerConnection(peerId) {
     };
 
     pc.ontrack = e => {
-        // Проверяем, что пришло: аудио или видео
         const kind = e.track.kind;
         const stream = e.streams[0];
 
         if (kind === "video") {
-            let video = document.getElementById("video-" + peerId);
-            if (!video) {
-                video = document.createElement("video");
-                video.id = "video-" + peerId;
-                video.autoplay = true;
-                video.playsInline = true;
-                document.getElementById("peersList").appendChild(video);
-            }
-            video.srcObject = stream;
+            const video = document.getElementById("video-" + peerId);
+            if (video) video.srcObject = stream;
         } else if (kind === "audio") {
-            let audio = document.getElementById("audio-" + peerId);
-            if (!audio) {
-                audio = document.createElement("audio");
-                audio.id = "audio-" + peerId;
-                audio.autoplay = true;
-                audio.playsInline = true;
-                document.getElementById("peersList").appendChild(audio);
-            }
-            audio.srcObject = stream;
+            const audio = document.getElementById("audio-" + peerId);
+            if (audio) audio.srcObject = stream;
             monitorSpeaking(peerId, stream);
         }
     };
 
-
     return pc;
 }
+
 
 async function sendOffer(peerId) {
     const pc = peers[peerId];
@@ -167,19 +152,55 @@ async function sendOffer(peerId) {
     ws?.send(JSON.stringify({ ...offer, to: peerId, from: clientId }));
 }
 
-function addPeerUI(peerId) {
+function addPeerUI(peerId, isLocal = false) {
     if (peerElements[peerId]) return;
+
     const div = document.createElement("div");
     div.className = "peer";
     div.id = "peer-" + peerId;
+
     div.innerHTML = `
-        <span class="peer-id">${peerId}</span>
-        <span class="mic" id="mic-${peerId}">🎤</span>
-        <div class="vu"><div class="fill" id="vu-${peerId}"></div></div>
+        <video id="video-${peerId}" autoplay playsinline ${isLocal ? "muted" : ""}></video>
+        <audio id="audio-${peerId}" autoplay playsinline ${isLocal ? "muted" : ""}></audio>
+        <div class="info">
+            <span class="peer-id">${isLocal ? "Вы" : peerId}</span>
+            <span class="mic" id="mic-${peerId}">🎤</span>
+            <div class="vu"><div class="fill" id="vu-${peerId}"></div></div>
+        </div>
+        ${isLocal ? `
+        <div class="controls">
+            <button id="mute-${peerId}">Выключить микрофон</button>
+            <button id="video-${peerId}-btn">Выключить видео</button>
+        </div>` : ""}
     `;
+
     peersList.appendChild(div);
     peerElements[peerId] = div;
+
+    // Для локального пользователя навешиваем обработчики
+    if (isLocal) {
+        const muteBtn = document.getElementById("mute-" + peerId);
+        const videoBtn = document.getElementById("video-" + peerId + "-btn");
+
+        let isMuted = false;
+        let isVideoOff = false;
+
+        muteBtn.addEventListener("click", () => {
+            if (!localStream) return;
+            isMuted = !isMuted;
+            localStream.getAudioTracks().forEach(t => t.enabled = !isMuted);
+            muteBtn.textContent = isMuted ? "Включить микрофон" : "Выключить микрофон";
+        });
+
+        videoBtn.addEventListener("click", () => {
+            if (!localStream) return;
+            isVideoOff = !isVideoOff;
+            localStream.getVideoTracks().forEach(t => t.enabled = !isVideoOff);
+            videoBtn.textContent = isVideoOff ? "Включить видео" : "Выключить видео";
+        });
+    }
 }
+
 
 function removePeerUI(peerId) {
     stopMonitor(peerId);
@@ -200,7 +221,7 @@ async function joinRoom() {
     if (!roomId) return alert("Введите Room ID");
 
     await startLocalStream();
-    getAudioCtx(); // гарантируем, что контекст разблокирован кликом
+    getAudioCtx(); // разблокируем AudioContext
 
     ws = new WebSocket(wsURL(roomId));
     ws.onmessage = async evt => {
@@ -209,11 +230,13 @@ async function joinRoom() {
 
         if (type === "id") {
             clientId = msg.id;
-            muteBtn.disabled = true; // включим после получения стрима
-            addPeerUI(clientId);
+            addPeerUI(clientId, true);
+
+            const localVideo = document.getElementById("video-" + clientId);
+            if (localVideo) localVideo.srcObject = localStream;
+
             const audioStream = new MediaStream(localStream.getAudioTracks());
             monitorSpeaking(clientId, audioStream);
-            muteBtn.disabled = false;
         } else if (type === "new-peer") {
             const newId = msg.id;
             addPeerUI(newId);
@@ -255,6 +278,7 @@ async function joinRoom() {
     leaveBtn.disabled = false;
     roomInput.disabled = true;
 }
+
 
 function leaveRoom() {
     if (ws) {
