@@ -4,12 +4,8 @@ from typing import Dict
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
 from starlette.staticfiles import StaticFiles
-from app.routers import rooms
 
 app = FastAPI()
-
-# Подключаем роутер комнат
-app.include_router(rooms.router)
 
 # Подключаем статику
 app.mount("/static", StaticFiles(directory="static"), name="static")
