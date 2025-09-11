@@ -33,17 +33,16 @@ function wsURL(roomId) {
     return `${proto}://${location.host}/ws/${roomId}`;
 }
 
-// ======== Локальный поток ========
+// ======== Локальный аудио поток ========
 async function startLocalStream() {
     try {
         localStream = await navigator.mediaDevices.getUserMedia({
-            audio: { echoCancellation:true, noiseSuppression:true },
-            video: { width:640, height:480 }
+            audio: { echoCancellation:true, noiseSuppression:true }
         });
         return localStream;
     } catch(e) {
-        console.error("Ошибка доступа к камере/микрофону:", e);
-        alert("Разрешите доступ к камере и микрофону");
+        console.error("Ошибка доступа к микрофону:", e);
+        alert("Разрешите доступ к микрофону");
     }
 }
 
@@ -109,7 +108,7 @@ function createPeerConnection(peerId) {
     const pc = new RTCPeerConnection({ iceServers:[{urls:"stun:stun.l.google.com:19302"}] });
 
     if(localStream){
-        localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+        localStream.getAudioTracks().forEach(track => pc.addTrack(track, localStream));
     }
 
     pc.onicecandidate = e=>{
@@ -127,16 +126,7 @@ function handleTrack(peerId, event){
         addPeerUI(peerId, document.getElementById("peersList"));
     }
 
-    const video = document.getElementById("video-"+peerId);
     const audio = document.getElementById("audio-"+peerId);
-    if(video && event.track.kind === "video"){
-        video.srcObject = stream;
-        video.autoplay = true;
-        video.playsInline = true;
-        video.muted = peerId===clientId;
-        video.style.display = "block";
-        video.play().catch(()=>{});
-    }
     if(audio && event.track.kind === "audio"){
         audio.srcObject = stream;
         audio.autoplay = true;
@@ -151,7 +141,6 @@ function addPeerUI(peerId, peersList, isLocal=false){
     const div = document.createElement("div");
     div.className="peer"; div.id="peer-"+peerId;
     div.innerHTML=`
-        <video id="video-${peerId}" autoplay playsinline ${isLocal?"muted":""}></video>
         <audio id="audio-${peerId}" autoplay playsinline ${isLocal?"muted":""}></audio>
         <div class="info">
             <span class="peer-id">${isLocal?"Вы":peerId}</span>
@@ -160,7 +149,6 @@ function addPeerUI(peerId, peersList, isLocal=false){
         </div>
         ${isLocal?`<div class="controls">
             <button id="mute-${peerId}">Выключить микрофон</button>
-            <button id="video-${peerId}-btn">Выключить видео</button>
         </div>`:""}
     `;
     peersList.appendChild(div);
@@ -168,21 +156,12 @@ function addPeerUI(peerId, peersList, isLocal=false){
 
     if(isLocal){
         const muteBtn=document.getElementById("mute-"+peerId);
-        const videoBtn=document.getElementById("video-"+peerId+"-btn");
-        let isMuted=false, isVideoOff=false;
-
+        let isMuted=false;
         muteBtn.addEventListener("click", ()=>{
             if(!localStream) return;
             isMuted = !isMuted;
             localStream.getAudioTracks()[0].enabled = !isMuted;
             muteBtn.textContent = isMuted?"Включить микрофон":"Выключить микрофон";
-        });
-
-        videoBtn.addEventListener("click", ()=>{
-            if(!localStream) return;
-            isVideoOff = !isVideoOff;
-            localStream.getVideoTracks()[0].enabled = !isVideoOff;
-            videoBtn.textContent = isVideoOff?"Включить видео":"Выключить видео";
         });
     }
 }
@@ -209,12 +188,8 @@ async function joinRoom(roomInput, peersList, joinBtn, leaveBtn){
         if(type==="id"){
             clientId = msg.id;
             addPeerUI(clientId, peersList, true);
-
-            const localVideo = document.getElementById("video-"+clientId);
-            if(localVideo) localVideo.srcObject = localStream;
             const localAudio = document.getElementById("audio-"+clientId);
             if(localAudio) localAudio.srcObject = localStream;
-
             monitorSpeaking(clientId, localStream);
 
         } else if(type==="new-peer"){

@@ -77,8 +77,8 @@ button:active {
 }
 
 #muteBtn {
-    background: var(--bg-card);
-    color: var(--text);
+    background: var(--primary);
+    color: #fff;
 }
 
 #peersList {
@@ -100,7 +100,6 @@ button:active {
     gap: 10px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
     transition: background 0.2s, box-shadow 0.2s;
-    overflow: visible;
 }
 
 .peer-id {
@@ -153,13 +152,8 @@ button:active {
 }
 
 @keyframes mic-bounce {
-    0%,
-    100% {
-        transform: translateY(0) scale(1);
-    }
-    50% {
-        transform: translateY(-2px) scale(1.1);
-    }
+    0%, 100% { transform: translateY(0) scale(1); }
+    50% { transform: translateY(-2px) scale(1.1); }
 }
 
 .vu {
@@ -177,34 +171,20 @@ button:active {
     transition: width 0.08s linear;
 }
 
-/* Видео и аудио карточки */
-.peer video {
-    width: 100%;
-    max-width: 160px;
-    aspect-ratio: 4/3;
-    border-radius: var(--radius);
-    background: #000;
-    object-fit: cover;
-    transition: opacity 0.3s ease;
-}
-
-.peer video.hidden {
-    opacity: 0;
-    display: none; /* скрываем блок, когда видео выключено */
-}
-
 .peer audio {
     width: 100%;
+}
+
+/* Кнопка микрофона */
+.controls button#muteBtn {
+    background: var(--primary);
+    color: #fff;
+    font-weight: 600;
 }
 
 @media (max-width: 600px) {
     #peersList {
         grid-template-columns: 1fr;
         gap: 8px;
-    }
-
-    .peer video {
-        max-width: 100%;
-        aspect-ratio: 4/3;
     }
 }
