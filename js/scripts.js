@@ -119,6 +119,8 @@ function stopMonitor(peerId){
 // ======== PeerConnection ========
 function createPeerConnection(peerId){
     const pc = new RTCPeerConnection({ iceServers:[{urls:"stun:stun.l.google.com:19302"}] });
+
+    // добавляем все локальные треки к соединению
     if(localStream){
         localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
     }
@@ -128,25 +130,38 @@ function createPeerConnection(peerId){
     };
 
     pc.ontrack = e=>{
-        const stream = e.streams[0];
-        if(e.track.kind==="video"){
+        let stream = e.streams[0];
+
+        // создаём UI если ещё нет
+        if(!document.getElementById("peer-"+peerId)){
+            addPeerUI(peerId, document.getElementById("peersList"));
+        }
+
+        if(e.track.kind === "video"){
             const video = document.getElementById("video-"+peerId);
             if(video){
                 video.srcObject = stream;
-                video.playsInline = true;
                 video.autoplay = true;
-                video.style.display = stream.getVideoTracks()[0]?.enabled ? "block" : "none";
+                video.playsInline = true;
+                video.muted = peerId===clientId; // локальное всегда muted
+                video.style.display = "block";
+                video.play().catch(()=>{});
             }
         }
-        if(e.track.kind==="audio"){
+        if(e.track.kind === "audio"){
             const audio = document.getElementById("audio-"+peerId);
-            if(audio) audio.srcObject = stream;
+            if(audio){
+                audio.srcObject = stream;
+                audio.autoplay = true;
+                audio.play().catch(()=>{});
+            }
             monitorSpeaking(peerId, stream);
         }
     };
 
     return pc;
 }
+
 
 // ======== UI ========
 function addPeerUI(peerId, peersList, isLocal=false){
@@ -184,13 +199,22 @@ function addPeerUI(peerId, peersList, isLocal=false){
 
         videoBtn.addEventListener("click", ()=>{
             if(!localStream) return;
-            isVideoOff=!isVideoOff;
+            isVideoOff = !isVideoOff;
 
             const videoTrack = localStream.getVideoTracks()[0];
-            if(videoTrack) videoTrack.enabled = !isVideoOff; // просто отключаем поток
+            if(videoTrack) videoTrack.enabled = !isVideoOff;
 
-            const videoEl = document.getElementById(`video-${peerId}`);
-            if(videoEl) videoEl.style.display = isVideoOff?"none":"block";
+            const videoEl = document.getElementById(`video-${clientId}`);
+            if(videoEl){
+                videoEl.style.display = isVideoOff?"none":"block";
+                if(!isVideoOff) videoEl.play().catch(()=>{});
+            }
+
+            // обновляем трек у всех соединений
+            Object.values(peers).forEach(pc=>{
+                const sender = pc.getSenders().find(s=>s.track && s.track.kind==="video");
+                if(sender) sender.replaceTrack(videoTrack);
+            });
 
             videoBtn.textContent = isVideoOff?"Включить видео":"Выключить видео";
         });
@@ -222,16 +246,7 @@ async function joinRoom(roomInput, peersList, joinBtn, leaveBtn){
             addPeerUI(clientId, peersList, true);
 
             const localVideo=document.getElementById("video-"+clientId);
-            if (localVideo) {
-                localVideo.muted = true;         // обязательно до присвоения потока
-                localVideo.playsInline = true;   // для iOS
-                localVideo.autoplay = true;
-                localVideo.srcObject = localStream;
-                localVideo.style.display = "block";
-                localVideo.play().catch(err=>{
-                    console.warn("Не удалось autoplay локального видео:", err);
-                });
-            }
+            if(localVideo) localVideo.srcObject=localStream;
 
             monitorSpeaking(clientId, new MediaStream(localStream.getAudioTracks()));
 
