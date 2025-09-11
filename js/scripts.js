@@ -9,11 +9,16 @@ const peers = {};
 const peerElements = {};
 const speakingLoops = {}; // чтобы не запускать два монитора на одного пира
 
-const joinBtn  = document.getElementById("join");
-const leaveBtn = document.getElementById("leave");
-const muteBtn  = document.getElementById("muteBtn");
-const roomInput = document.getElementById("room");
-const peersList = document.getElementById("peersList");
+document.addEventListener("DOMContentLoaded", () => {
+    const joinBtn  = document.getElementById("join");
+    const leaveBtn = document.getElementById("leave");
+    const roomInput = document.getElementById("room");
+    const peersList = document.getElementById("peersList");
+
+    // Теперь создаём события тут:
+    joinBtn.addEventListener("click", joinRoom);
+    leaveBtn.addEventListener("click", leaveRoom);
+});
 
 let audioContext;
 function getAudioCtx() {
@@ -152,6 +157,7 @@ async function sendOffer(peerId) {
     ws?.send(JSON.stringify({ ...offer, to: peerId, from: clientId }));
 }
 
+
 function addPeerUI(peerId, isLocal = false) {
     if (peerElements[peerId]) return;
 
@@ -200,6 +206,7 @@ function addPeerUI(peerId, isLocal = false) {
         });
     }
 }
+
 
 
 function removePeerUI(peerId) {
