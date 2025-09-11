@@ -35,11 +35,26 @@ function wsURL(roomId) {
 }
 
 async function startLocalStream() {
-    localStream = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-        video: { width: 640, height: 480 }
-    });
-    return localStream;
+    try {
+        localStream = await navigator.mediaDevices.getUserMedia({
+            audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+            video: { width: 640, height: 480 }
+        });
+
+        // сразу присваиваем локальное видео
+        const localVideo = document.getElementById(`video-${clientId}`);
+        if (localVideo) {
+            localVideo.srcObject = localStream;
+            localVideo.muted = true; // обязательно для iOS
+            localVideo.playsInline = true;
+            await localVideo.play().catch(()=>{});
+        }
+
+        return localStream;
+    } catch(e) {
+        console.error("Не удалось получить камеру/микрофон:", e);
+        alert("Невозможно получить доступ к камере/микрофону. Разрешите доступ в настройках.");
+    }
 }
 
 /** Детектор речи на RMS с гистерезисом и VU-индикатором */
@@ -120,13 +135,20 @@ function createPeerConnection(peerId) {
 
     pc.ontrack = e => {
         const stream = e.streams[0];
+
         if (e.track.kind === "video") {
             const video = document.getElementById("video-" + peerId);
             if (video) {
                 video.srcObject = stream;
+                video.playsInline = true;
+                video.autoplay = true;
+
+                // если трек выключен, скрываем видео
                 video.style.display = stream.getVideoTracks()[0]?.enabled ? "block" : "none";
             }
-        } else if (e.track.kind === "audio") {
+        }
+
+        if (e.track.kind === "audio") {
             const audio = document.getElementById("audio-" + peerId);
             if (audio) audio.srcObject = stream;
             monitorSpeaking(peerId, stream);
@@ -185,11 +207,14 @@ function addPeerUI(peerId, peersList, isLocal = false) {
         videoBtn.addEventListener("click", () => {
             if (!localStream) return;
             isVideoOff = !isVideoOff;
-            localStream.getVideoTracks().forEach(t => t.enabled = !isVideoOff);
-            videoBtn.textContent = isVideoOff ? "Включить видео" : "Выключить видео";
+
+            const videoTrack = localStream.getVideoTracks()[0];
+            if (videoTrack) videoTrack.enabled = !isVideoOff; // останавливаем поток
 
             const videoEl = document.getElementById(`video-${peerId}`);
             if (videoEl) videoEl.style.display = isVideoOff ? "none" : "block";
+
+            videoBtn.textContent = isVideoOff ? "Включить видео" : "Выключить видео";
         });
     }
 }
