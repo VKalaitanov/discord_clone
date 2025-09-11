@@ -185,22 +185,14 @@ function addPeerUI(peerId, peersList, isLocal=false){
         videoBtn.addEventListener("click", ()=>{
             if(!localStream) return;
             isVideoOff=!isVideoOff;
-            const videoTrack=localStream.getVideoTracks()[0];
-            const videoEl=document.getElementById(`video-${peerId}`);
-            if(videoTrack){
-                // удаляем или добавляем трек в все соединения
-                Object.values(peers).forEach(pc=>{
-                    pc.getSenders().forEach(sender=>{
-                        if(sender.track===videoTrack){
-                            if(isVideoOff) pc.removeTrack(sender);
-                            else pc.addTrack(videoTrack, localStream);
-                        }
-                    });
-                });
-                videoTrack.enabled=!isVideoOff;
-            }
-            if(videoEl) videoEl.style.display=isVideoOff?"none":"block";
-            videoBtn.textContent=isVideoOff?"Включить видео":"Выключить видео";
+
+            const videoTrack = localStream.getVideoTracks()[0];
+            if(videoTrack) videoTrack.enabled = !isVideoOff; // просто отключаем поток
+
+            const videoEl = document.getElementById(`video-${peerId}`);
+            if(videoEl) videoEl.style.display = isVideoOff?"none":"block";
+
+            videoBtn.textContent = isVideoOff?"Включить видео":"Выключить видео";
         });
     }
 }
