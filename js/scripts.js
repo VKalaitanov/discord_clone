@@ -33,13 +33,14 @@ function wsURL(roomId) {
 }
 
 // ======== Локальный поток ========
+let localAudioStream = null;
+let localVideoStream = null;
+
 async function startLocalStream() {
     try {
-        localStream = await navigator.mediaDevices.getUserMedia({
-            audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-            video: { width: 640, height: 480 }
-        });
-        return localStream;
+        localAudioStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation:true, noiseSuppression:true } });
+        localVideoStream = await navigator.mediaDevices.getUserMedia({ video: { width:640, height:480 } });
+        return { audio: localAudioStream, video: localVideoStream };
     } catch(e) {
         console.error("Ошибка доступа к камере/микрофону:", e);
         alert("Разрешите доступ к камере и микрофону");
@@ -104,44 +105,21 @@ function stopMonitor(peerId){
 }
 
 // ======== PeerConnection ========
-function createPeerConnection(peerId){
+function createPeerConnection(peerId) {
     const pc = new RTCPeerConnection({ iceServers:[{urls:"stun:stun.l.google.com:19302"}] });
-    if(localStream){
-        localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+
+    if(localAudioStream){
+        localAudioStream.getTracks().forEach(track => pc.addTrack(track, localAudioStream));
+    }
+    if(localVideoStream){
+        localVideoStream.getTracks().forEach(track => pc.addTrack(track, localVideoStream));
     }
 
+    // ICE и ontrack остаются без изменений
     pc.onicecandidate = e=>{
         if(e.candidate) ws?.send(JSON.stringify({type:"candidate", candidate:e.candidate, to:peerId, from:clientId}));
     };
-
-    pc.ontrack = e=>{
-        const stream = e.streams[0];
-        if(!document.getElementById("peer-"+peerId)){
-            addPeerUI(peerId, document.getElementById("peersList"));
-        }
-
-        if(e.track.kind === "video"){
-            const video = document.getElementById("video-"+peerId);
-            if(video){
-                video.srcObject = stream;
-                video.autoplay = true;
-                video.playsInline = true;
-                video.muted = peerId===clientId;
-                video.style.display = "block";
-                video.play().catch(()=>{});
-            }
-        }
-
-        if(e.track.kind === "audio"){
-            const audio = document.getElementById("audio-"+peerId);
-            if(audio){
-                audio.srcObject = stream;
-                audio.autoplay = true;
-                audio.play().catch(()=>{});
-            }
-            monitorSpeaking(peerId, stream);
-        }
-    };
+    pc.ontrack = e => handleTrack(peerId, e);
 
     return pc;
 }
@@ -180,24 +158,17 @@ function addPeerUI(peerId, peersList, isLocal=false){
         });
 
         videoBtn.addEventListener("click", ()=>{
-            if(!localStream) return;
+            if(!localVideoStream) return;
             isVideoOff = !isVideoOff;
-
-            const videoTrack = localStream.getVideoTracks()[0];
-            if(videoTrack) videoTrack.enabled = !isVideoOff;
-
-            const videoEl = document.getElementById(`video-${clientId}`);
-            if(videoEl){
-                videoEl.style.display = isVideoOff?"none":"block";
-                if(!isVideoOff) videoEl.play().catch(()=>{});
-            }
-
-            Object.values(peers).forEach(pc=>{
-                const sender = pc.getSenders().find(s=>s.track && s.track.kind==="video");
-                if(sender) sender.replaceTrack(videoTrack);
-            });
-
+            localVideoStream.getVideoTracks()[0].enabled = !isVideoOff;
             videoBtn.textContent = isVideoOff?"Включить видео":"Выключить видео";
+        });
+
+        muteBtn.addEventListener("click", ()=>{
+            if(!localAudioStream) return;
+            isMuted = !isMuted;
+            localAudioStream.getAudioTracks()[0].enabled = !isMuted;
+            muteBtn.textContent = isMuted?"Включить микрофон":"Выключить микрофон";
         });
     }
 }
