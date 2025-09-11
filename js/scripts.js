@@ -39,18 +39,6 @@ async function startLocalStream() {
             audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
             video: { width: 640, height: 480 }
         });
-
-        // Локальное видео для нас
-        if (clientId) {
-            const video = document.getElementById(`video-${clientId}`);
-            if (video) {
-                video.srcObject = localStream;
-                video.muted = true;
-                video.playsInline = true;
-                await video.play().catch(()=>{});
-            }
-        }
-
         return localStream;
     } catch(e) {
         console.error("Ошибка доступа к камере/микрофону:", e);
@@ -61,7 +49,6 @@ async function startLocalStream() {
 // ======== Мониторинг речи ========
 function monitorSpeaking(peerId, stream) {
     if (speakingLoops[peerId]) return;
-
     const ctx = getAudioCtx();
     const analyser = ctx.createAnalyser();
     analyser.fftSize = 1024;
@@ -119,8 +106,6 @@ function stopMonitor(peerId){
 // ======== PeerConnection ========
 function createPeerConnection(peerId){
     const pc = new RTCPeerConnection({ iceServers:[{urls:"stun:stun.l.google.com:19302"}] });
-
-    // добавляем все локальные треки к соединению
     if(localStream){
         localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
     }
@@ -130,9 +115,7 @@ function createPeerConnection(peerId){
     };
 
     pc.ontrack = e=>{
-        let stream = e.streams[0];
-
-        // создаём UI если ещё нет
+        const stream = e.streams[0];
         if(!document.getElementById("peer-"+peerId)){
             addPeerUI(peerId, document.getElementById("peersList"));
         }
@@ -143,11 +126,12 @@ function createPeerConnection(peerId){
                 video.srcObject = stream;
                 video.autoplay = true;
                 video.playsInline = true;
-                video.muted = peerId===clientId; // локальное всегда muted
+                video.muted = peerId===clientId;
                 video.style.display = "block";
                 video.play().catch(()=>{});
             }
         }
+
         if(e.track.kind === "audio"){
             const audio = document.getElementById("audio-"+peerId);
             if(audio){
@@ -162,11 +146,9 @@ function createPeerConnection(peerId){
     return pc;
 }
 
-
 // ======== UI ========
 function addPeerUI(peerId, peersList, isLocal=false){
     if(peerElements[peerId]) return;
-
     const div = document.createElement("div");
     div.className="peer"; div.id="peer-"+peerId;
     div.innerHTML=`
@@ -210,7 +192,6 @@ function addPeerUI(peerId, peersList, isLocal=false){
                 if(!isVideoOff) videoEl.play().catch(()=>{});
             }
 
-            // обновляем трек у всех соединений
             Object.values(peers).forEach(pc=>{
                 const sender = pc.getSenders().find(s=>s.track && s.track.kind==="video");
                 if(sender) sender.replaceTrack(videoTrack);
@@ -228,11 +209,10 @@ function removePeerUI(peerId){
     delete peerElements[peerId];
 }
 
-// ======== Присоединение ========
+// ======== Join/Leave ========
 async function joinRoom(roomInput, peersList, joinBtn, leaveBtn){
     const roomId = roomInput.value.trim();
     if(!roomId) return alert("Введите Room ID");
-
     await startLocalStream();
     getAudioCtx();
 
@@ -244,10 +224,8 @@ async function joinRoom(roomInput, peersList, joinBtn, leaveBtn){
         if(type==="id"){
             clientId=msg.id;
             addPeerUI(clientId, peersList, true);
-
             const localVideo=document.getElementById("video-"+clientId);
             if(localVideo) localVideo.srcObject=localStream;
-
             monitorSpeaking(clientId, new MediaStream(localStream.getAudioTracks()));
 
         } else if(type==="new-peer"){
@@ -261,9 +239,8 @@ async function joinRoom(roomInput, peersList, joinBtn, leaveBtn){
             const leftId=msg.id;
             if(peers[leftId]) { peers[leftId].close(); delete peers[leftId]; }
             removePeerUI(leftId);
-        } else if(from===clientId) return;
+        } else if(!from || from===clientId) return;
 
-        if(!from) return;
         if(!peers[from]) peers[from]=createPeerConnection(from);
         const pc=peers[from];
 
@@ -284,7 +261,6 @@ async function joinRoom(roomInput, peersList, joinBtn, leaveBtn){
     joinBtn.disabled=true; leaveBtn.disabled=false; roomInput.disabled=true;
 }
 
-// ======== Выход ========
 function leaveRoom(joinBtn, leaveBtn, roomInput){
     if(ws){ ws.close(); ws=null; }
     if(localStream){ localStream.getTracks().forEach(t=>t.stop()); localStream=null; }
@@ -298,7 +274,6 @@ function leaveRoom(joinBtn, leaveBtn, roomInput){
     joinBtn.disabled=false; leaveBtn.disabled=true; roomInput.disabled=false;
 }
 
-// ======== Отправка оффера ========
 async function sendOffer(peerId){
     const pc=peers[peerId];
     const offer=await pc.createOffer();

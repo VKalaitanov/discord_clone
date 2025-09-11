@@ -24,7 +24,6 @@ async def index():
 
 @app.websocket("/ws/{room_id}")
 async def websocket_endpoint(websocket: WebSocket, room_id: str):
-    """Сигналинг для голосовой комнаты с логированием"""
     await websocket.accept()
     client_id = str(uuid.uuid4())
     room = rooms_ws.setdefault(room_id, {})
@@ -36,11 +35,12 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str):
     await websocket.send_json({"type": "id", "id": client_id})
 
     # Уведомляем остальных участников о новом подключении
-    if len(room) > 1:
-        await asyncio.gather(*[
-            peer_ws.send_json({"type": "new-peer", "id": client_id})
-            for peer_id, peer_ws in room.items() if peer_id != client_id
-        ])
+    for peer_id, peer_ws in room.items():
+        if peer_id != client_id:
+            try:
+                await peer_ws.send_json({"type": "new-peer", "id": client_id})
+            except Exception as e:
+                print(f"[WARN] Failed to notify {peer_id}: {e}")
 
     try:
         while True:
@@ -49,7 +49,14 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str):
             if to_id:
                 peer_ws = room.get(to_id)
                 if peer_ws:
-                    await peer_ws.send_json(data)
+                    try:
+                        await peer_ws.send_json(data)
+                    except Exception as e:
+                        print(f"[WARN] Failed to send message from {client_id} to {to_id}: {e}")
+            else:
+                # Broadcast для отладки, если нужно
+                print(f"[DEBUG] Received message without 'to' from {client_id}: {data}")
+
     except WebSocketDisconnect:
         print(f"[INFO] Client {client_id} disconnected from room {room_id}")
     except Exception as e:
@@ -59,11 +66,12 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str):
         if client_id in room:
             room.pop(client_id)
             print(f"[INFO] Client {client_id} removed from room {room_id}. Remaining participants: {len(room)}")
-            if room:
-                await asyncio.gather(*[
-                    peer_ws.send_json({"type": "peer-left", "id": client_id})
-                    for peer_ws in room.values()
-                ])
+            for peer_ws in room.values():
+                try:
+                    await peer_ws.send_json({"type": "peer-left", "id": client_id})
+                except Exception as e:
+                    print(f"[WARN] Failed to notify peer about leaving {client_id}: {e}")
+
         if not room:
             rooms_ws.pop(room_id, None)
             print(f"[INFO] Room {room_id} is now empty and removed.")
