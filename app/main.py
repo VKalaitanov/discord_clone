@@ -14,11 +14,13 @@ app.mount("/js", StaticFiles(directory="js"), name="js")
 # rooms_ws[room_id] = { client_id: websocket }
 rooms_ws: Dict[str, Dict[str, WebSocket]] = {}
 
+
 @app.get("/", response_class=HTMLResponse)
 async def index():
     """Главная страница"""
     with open("frontend/index.html", "r", encoding="utf-8") as f:
         return f.read()
+
 
 @app.websocket("/ws/{room_id}")
 async def websocket_endpoint(websocket: WebSocket, room_id: str):
