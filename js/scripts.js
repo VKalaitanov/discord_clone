@@ -245,7 +245,7 @@ function toggleMute() {
     if (!localStream) return;
     isMuted = !isMuted;
     localStream.getAudioTracks().forEach(t => t.enabled = !isMuted);
-    muteBtn.textContent = isMuted ? "Unmute" : "Mute";
+    muteBtn.textContent = isMuted ? "Включить микрофон" : "Выключить микрофон";
 }
 
 joinBtn.addEventListener("click", joinRoom);
