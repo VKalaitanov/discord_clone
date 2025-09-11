@@ -1,7 +1,6 @@
 window.DEBUG_SPEECH = true;
 
-let localAudioStream = null;
-let localVideoStream = null;
+let localStream = null;
 let ws = null;
 let clientId = null;
 
@@ -37,9 +36,11 @@ function wsURL(roomId) {
 // ======== Локальный поток ========
 async function startLocalStream() {
     try {
-        localAudioStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation:true, noiseSuppression:true } });
-        localVideoStream = await navigator.mediaDevices.getUserMedia({ video: { width:640, height:480 } });
-        return { audio: localAudioStream, video: localVideoStream };
+        localStream = await navigator.mediaDevices.getUserMedia({
+            audio: { echoCancellation:true, noiseSuppression:true },
+            video: { width:640, height:480 }
+        });
+        return localStream;
     } catch(e) {
         console.error("Ошибка доступа к камере/микрофону:", e);
         alert("Разрешите доступ к камере и микрофону");
@@ -107,11 +108,8 @@ function stopMonitor(peerId){
 function createPeerConnection(peerId) {
     const pc = new RTCPeerConnection({ iceServers:[{urls:"stun:stun.l.google.com:19302"}] });
 
-    if(localAudioStream){
-        localAudioStream.getTracks().forEach(track => pc.addTrack(track, localAudioStream));
-    }
-    if(localVideoStream){
-        localVideoStream.getTracks().forEach(track => pc.addTrack(track, localVideoStream));
+    if(localStream){
+        localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
     }
 
     pc.onicecandidate = e=>{
@@ -129,25 +127,20 @@ function handleTrack(peerId, event){
         addPeerUI(peerId, document.getElementById("peersList"));
     }
 
-    if(event.track.kind === "video"){
-        const video = document.getElementById("video-"+peerId);
-        if(video){
-            video.srcObject = stream;
-            video.autoplay = true;
-            video.playsInline = true;
-            video.muted = peerId===clientId;
-            video.style.display = "block";
-            video.play().catch(()=>{});
-        }
+    const video = document.getElementById("video-"+peerId);
+    const audio = document.getElementById("audio-"+peerId);
+    if(video && event.track.kind === "video"){
+        video.srcObject = stream;
+        video.autoplay = true;
+        video.playsInline = true;
+        video.muted = peerId===clientId;
+        video.style.display = "block";
+        video.play().catch(()=>{});
     }
-
-    if(event.track.kind === "audio"){
-        const audio = document.getElementById("audio-"+peerId);
-        if(audio){
-            audio.srcObject = stream;
-            audio.autoplay = true;
-            audio.play().catch(()=>{});
-        }
+    if(audio && event.track.kind === "audio"){
+        audio.srcObject = stream;
+        audio.autoplay = true;
+        audio.play().catch(()=>{});
         monitorSpeaking(peerId, stream);
     }
 }
@@ -179,16 +172,16 @@ function addPeerUI(peerId, peersList, isLocal=false){
         let isMuted=false, isVideoOff=false;
 
         muteBtn.addEventListener("click", ()=>{
-            if(!localAudioStream) return;
+            if(!localStream) return;
             isMuted = !isMuted;
-            localAudioStream.getAudioTracks()[0].enabled = !isMuted;
+            localStream.getAudioTracks()[0].enabled = !isMuted;
             muteBtn.textContent = isMuted?"Включить микрофон":"Выключить микрофон";
         });
 
         videoBtn.addEventListener("click", ()=>{
-            if(!localVideoStream) return;
+            if(!localStream) return;
             isVideoOff = !isVideoOff;
-            localVideoStream.getVideoTracks()[0].enabled = !isVideoOff;
+            localStream.getVideoTracks()[0].enabled = !isVideoOff;
             videoBtn.textContent = isVideoOff?"Включить видео":"Выключить видео";
         });
     }
@@ -218,20 +211,11 @@ async function joinRoom(roomInput, peersList, joinBtn, leaveBtn){
             addPeerUI(clientId, peersList, true);
 
             const localVideo = document.getElementById("video-"+clientId);
-            if(localVideo && localVideoStream){
-                localVideo.srcObject = localVideoStream;
-                localVideo.muted = true;
-                localVideo.play().catch(()=>{});
-            }
-
+            if(localVideo) localVideo.srcObject = localStream;
             const localAudio = document.getElementById("audio-"+clientId);
-            if(localAudio && localAudioStream){
-                localAudio.srcObject = localAudioStream;
-                localAudio.muted = true;
-                localAudio.play().catch(()=>{});
-            }
+            if(localAudio) localAudio.srcObject = localStream;
 
-            monitorSpeaking(clientId, localAudioStream);
+            monitorSpeaking(clientId, localStream);
 
         } else if(type==="new-peer"){
             const newId=msg.id;
@@ -268,8 +252,7 @@ async function joinRoom(roomInput, peersList, joinBtn, leaveBtn){
 
 function leaveRoom(joinBtn, leaveBtn, roomInput){
     if(ws){ ws.close(); ws=null; }
-    if(localAudioStream) { localAudioStream.getTracks().forEach(t=>t.stop()); localAudioStream=null; }
-    if(localVideoStream) { localVideoStream.getTracks().forEach(t=>t.stop()); localVideoStream=null; }
+    if(localStream) { localStream.getTracks().forEach(t=>t.stop()); localStream=null; }
 
     Object.values(peers).forEach(pc=>pc.close());
     Object.keys(peers).forEach(k=>delete peers[k]);
