@@ -222,7 +222,16 @@ async function joinRoom(roomInput, peersList, joinBtn, leaveBtn){
             addPeerUI(clientId, peersList, true);
 
             const localVideo=document.getElementById("video-"+clientId);
-            if(localVideo) localVideo.srcObject=localStream;
+            if (localVideo) {
+                localVideo.muted = true;         // обязательно до присвоения потока
+                localVideo.playsInline = true;   // для iOS
+                localVideo.autoplay = true;
+                localVideo.srcObject = localStream;
+                localVideo.style.display = "block";
+                localVideo.play().catch(err=>{
+                    console.warn("Не удалось autoplay локального видео:", err);
+                });
+            }
 
             monitorSpeaking(clientId, new MediaStream(localStream.getAudioTracks()));
 
