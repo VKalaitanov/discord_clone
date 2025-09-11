@@ -33,22 +33,12 @@ function wsURL(roomId) {
 }
 
 async function startLocalStream() {
-    // Запрашиваем сразу и камеру, и микрофон
     localStream = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-        video: { width: 640, height: 480 } // можно выставить ограничения
+        video: { width: 640, height: 480 }
     });
 
-    // Создаём локальное видео для отображения себя
-    let localVideo = document.getElementById("localVideo");
-    if (!localVideo) {
-        localVideo = document.createElement("video");
-        localVideo.id = "localVideo";
-        localVideo.autoplay = true;
-        localVideo.muted = true;   // чтобы не слышать самого себя
-        localVideo.playsInline = true;
-        document.getElementById("peersList").appendChild(localVideo);
-    }
+    const localVideo = document.getElementById("localVideo");
     localVideo.srcObject = localStream;
 }
 
@@ -221,7 +211,8 @@ async function joinRoom() {
             clientId = msg.id;
             muteBtn.disabled = true; // включим после получения стрима
             addPeerUI(clientId);
-            monitorSpeaking(clientId, localStream);
+            const audioStream = new MediaStream(localStream.getAudioTracks());
+            monitorSpeaking(clientId, audioStream);
             muteBtn.disabled = false;
         } else if (type === "new-peer") {
             const newId = msg.id;
@@ -266,11 +257,30 @@ async function joinRoom() {
 }
 
 function leaveRoom() {
-    ws && ws.close();
-    localStream && localStream.getTracks().forEach(t => t.stop());
+    if (ws) {
+        ws.close();
+        ws = null;
+    }
+
+    if (localStream) {
+        localStream.getTracks().forEach(t => t.stop());
+        localStream = null;
+    }
+
+    const localVideo = document.getElementById("localVideo");
+    if (localVideo) {
+        localVideo.srcObject = null;
+    }
+
     Object.values(peers).forEach(pc => pc.close());
     Object.keys(peers).forEach(k => delete peers[k]);
     Object.keys(peerElements).forEach(removePeerUI);
+
+    if (audioContext) {
+        audioContext.close();
+        audioContext = null;
+    }
+
     joinBtn.disabled = false;
     leaveBtn.disabled = true;
     muteBtn.disabled = true;
