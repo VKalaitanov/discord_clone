@@ -1,11 +1,13 @@
 window.DEBUG_SPEECH = true;
-let localStream = null;
+
+let localAudioStream = null;
+let localVideoStream = null;
 let ws = null;
 let clientId = null;
 
 const peers = {};          // RTCPeerConnections
 const peerElements = {};   // DOM карточки участников
-const speakingLoops = {};  // Чтобы не запускать два монитора на одного пира
+const speakingLoops = {};  // Мониторинг речи
 
 document.addEventListener("DOMContentLoaded", () => {
     const joinBtn  = document.getElementById("join");
@@ -33,9 +35,6 @@ function wsURL(roomId) {
 }
 
 // ======== Локальный поток ========
-let localAudioStream = null;
-let localVideoStream = null;
-
 async function startLocalStream() {
     try {
         localAudioStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation:true, noiseSuppression:true } });
@@ -115,13 +114,42 @@ function createPeerConnection(peerId) {
         localVideoStream.getTracks().forEach(track => pc.addTrack(track, localVideoStream));
     }
 
-    // ICE и ontrack остаются без изменений
     pc.onicecandidate = e=>{
         if(e.candidate) ws?.send(JSON.stringify({type:"candidate", candidate:e.candidate, to:peerId, from:clientId}));
     };
+
     pc.ontrack = e => handleTrack(peerId, e);
 
     return pc;
+}
+
+function handleTrack(peerId, event){
+    const stream = event.streams[0];
+    if(!document.getElementById("peer-"+peerId)){
+        addPeerUI(peerId, document.getElementById("peersList"));
+    }
+
+    if(event.track.kind === "video"){
+        const video = document.getElementById("video-"+peerId);
+        if(video){
+            video.srcObject = stream;
+            video.autoplay = true;
+            video.playsInline = true;
+            video.muted = peerId===clientId;
+            video.style.display = "block";
+            video.play().catch(()=>{});
+        }
+    }
+
+    if(event.track.kind === "audio"){
+        const audio = document.getElementById("audio-"+peerId);
+        if(audio){
+            audio.srcObject = stream;
+            audio.autoplay = true;
+            audio.play().catch(()=>{});
+        }
+        monitorSpeaking(peerId, stream);
+    }
 }
 
 // ======== UI ========
@@ -151,10 +179,10 @@ function addPeerUI(peerId, peersList, isLocal=false){
         let isMuted=false, isVideoOff=false;
 
         muteBtn.addEventListener("click", ()=>{
-            if(!localStream) return;
-            isMuted=!isMuted;
-            localStream.getAudioTracks().forEach(t=>t.enabled=!isMuted);
-            muteBtn.textContent=isMuted?"Включить микрофон":"Выключить микрофон";
+            if(!localAudioStream) return;
+            isMuted = !isMuted;
+            localAudioStream.getAudioTracks()[0].enabled = !isMuted;
+            muteBtn.textContent = isMuted?"Включить микрофон":"Выключить микрофон";
         });
 
         videoBtn.addEventListener("click", ()=>{
@@ -162,13 +190,6 @@ function addPeerUI(peerId, peersList, isLocal=false){
             isVideoOff = !isVideoOff;
             localVideoStream.getVideoTracks()[0].enabled = !isVideoOff;
             videoBtn.textContent = isVideoOff?"Включить видео":"Выключить видео";
-        });
-
-        muteBtn.addEventListener("click", ()=>{
-            if(!localAudioStream) return;
-            isMuted = !isMuted;
-            localAudioStream.getAudioTracks()[0].enabled = !isMuted;
-            muteBtn.textContent = isMuted?"Включить микрофон":"Выключить микрофон";
         });
     }
 }
@@ -193,11 +214,24 @@ async function joinRoom(roomInput, peersList, joinBtn, leaveBtn){
         const {type, from, candidate} = msg;
 
         if(type==="id"){
-            clientId=msg.id;
+            clientId = msg.id;
             addPeerUI(clientId, peersList, true);
-            const localVideo=document.getElementById("video-"+clientId);
-            if(localVideo) localVideo.srcObject=localStream;
-            monitorSpeaking(clientId, new MediaStream(localStream.getAudioTracks()));
+
+            const localVideo = document.getElementById("video-"+clientId);
+            if(localVideo && localVideoStream){
+                localVideo.srcObject = localVideoStream;
+                localVideo.muted = true;
+                localVideo.play().catch(()=>{});
+            }
+
+            const localAudio = document.getElementById("audio-"+clientId);
+            if(localAudio && localAudioStream){
+                localAudio.srcObject = localAudioStream;
+                localAudio.muted = true;
+                localAudio.play().catch(()=>{});
+            }
+
+            monitorSpeaking(clientId, localAudioStream);
 
         } else if(type==="new-peer"){
             const newId=msg.id;
@@ -234,7 +268,8 @@ async function joinRoom(roomInput, peersList, joinBtn, leaveBtn){
 
 function leaveRoom(joinBtn, leaveBtn, roomInput){
     if(ws){ ws.close(); ws=null; }
-    if(localStream){ localStream.getTracks().forEach(t=>t.stop()); localStream=null; }
+    if(localAudioStream) { localAudioStream.getTracks().forEach(t=>t.stop()); localAudioStream=null; }
+    if(localVideoStream) { localVideoStream.getTracks().forEach(t=>t.stop()); localVideoStream=null; }
 
     Object.values(peers).forEach(pc=>pc.close());
     Object.keys(peers).forEach(k=>delete peers[k]);
