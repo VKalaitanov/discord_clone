@@ -1,22 +1,26 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-    <meta charset="UTF-8" />
+    <meta charset="UTF-8"/>
     <title>Voice Room</title>
-    <link rel="stylesheet" href="/static/styles.css" />
+    <link rel="stylesheet" href="/static/styles.css"/>
 </head>
 <body>
-    <h2>Голосовая комната</h2>
-    <div class="controls">
-        <input id="room" placeholder="Номер комнаты"/>
-        <button id="join">Подключиться</button>
-        <button id="leave" disabled>Отключиться</button>
-        <button id="muteBtn" disabled>Выключить микрофон</button>
-    </div>
+<h2>Голосовая комната</h2>
+<div class="controls">
+    <input id="room" placeholder="Номер комнаты"/>
+    <button id="join">Подключиться</button>
+    <button id="leave" disabled>Отключиться</button>
+    <button id="muteBtn" disabled>Выключить микрофон</button>
+</div>
 
-    <div id="peersList"></div>
+<div class="local">
+    <video id="localVideo" autoplay muted playsinline></video>
+</div>
 
-    <!-- Скрипт подключаем из файла -->
-    <script src="/js/scripts.js"></script>
+<div id="peersList"></div>
+
+<!-- Скрипт подключаем из файла -->
+<script src="/js/scripts.js"></script>
 </body>
 </html>
