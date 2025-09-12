@@ -1,5 +1,4 @@
 import uuid
-import asyncio
 from typing import Dict
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
@@ -46,16 +45,24 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str):
         while True:
             data = await websocket.receive_json()
             to_id = data.get("to")
+            from_id = data.get("from", client_id)
+
             if to_id:
+                # Отправка конкретному получателю
                 peer_ws = room.get(to_id)
                 if peer_ws:
                     try:
                         await peer_ws.send_json(data)
                     except Exception as e:
-                        print(f"[WARN] Failed to send message from {client_id} to {to_id}: {e}")
+                        print(f"[WARN] Failed to send message from {from_id} to {to_id}: {e}")
             else:
-                # Broadcast для отладки, если нужно
-                print(f"[DEBUG] Received message without 'to' from {client_id}: {data}")
+                # Если to нет, рассылаем всем кроме отправителя (broadcast)
+                for peer_id, peer_ws in room.items():
+                    if peer_id != client_id:
+                        try:
+                            await peer_ws.send_json(data)
+                        except Exception as e:
+                            print(f"[WARN] Failed to broadcast message from {from_id} to {peer_id}: {e}")
 
     except WebSocketDisconnect:
         print(f"[INFO] Client {client_id} disconnected from room {room_id}")
