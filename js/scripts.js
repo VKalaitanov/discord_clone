@@ -20,25 +20,11 @@ document.addEventListener("DOMContentLoaded", () => {
     joinBtn.addEventListener("click", () => joinRoom(roomInput, peersList, joinBtn, leaveBtn));
     leaveBtn.addEventListener("click", () => leaveRoom(joinBtn, leaveBtn, roomInput));
 
-    videoBtn.addEventListener("click", async ()=>{
-        if(!localStream) return;
+    videoBtn.addEventListener("click", async () => {
+        if (!localStream) return;
         videoEnabled = !videoEnabled;
-        if(videoEnabled){
-            const newStream = await navigator.mediaDevices.getUserMedia({video:true});
-            localVideoTrack = newStream.getVideoTracks()[0];
-            localStream.addTrack(localVideoTrack);
-            Object.values(peers).forEach(pc=>{
-                pc.addTrack(localVideoTrack, localStream);
-                sendOffer(pc.peerId);
-            });
-            videoBtn.textContent = "Выключить видео";
-        } else {
-            if(localVideoTrack){
-                localVideoTrack.stop();
-                localStream.removeTrack(localVideoTrack);
-            }
-            videoBtn.textContent = "Включить видео";
-        }
+        await toggleVideo(videoEnabled);
+        videoBtn.textContent = videoEnabled ? "Выключить видео" : "Включить видео";
     });
 });
 
@@ -58,11 +44,11 @@ function wsURL(roomId) {
 }
 
 // ======== Локальный поток ========
-async function startLocalStream(){
+async function startLocalStream() {
     try {
         localStream = await navigator.mediaDevices.getUserMedia({
-            audio: { echoCancellation:true, noiseSuppression:true },
-            video: false // по умолчанию только голос
+            audio: { echoCancellation: true, noiseSuppression: true },
+            video: false
         });
         return localStream;
     } catch(e) {
@@ -71,9 +57,46 @@ async function startLocalStream(){
     }
 }
 
+// ======== Видео ========
+async function toggleVideo(enable) {
+    if (enable) {
+        const newStream = await navigator.mediaDevices.getUserMedia({ video: true });
+        localVideoTrack = newStream.getVideoTracks()[0];
+        localStream.addTrack(localVideoTrack);
+
+        Object.values(peers).forEach(pc => {
+            const sender = pc.getSenders().find(s => s.track?.kind === 'video');
+            if (sender) pc.removeTrack(sender);
+            pc.addTrack(localVideoTrack, localStream);
+            sendOffer(getPeerIdByPC(pc));
+        });
+
+        const localVideoEl = document.getElementById("video-" + clientId);
+        if (localVideoEl) localVideoEl.srcObject = localStream;
+
+    } else {
+        if (localVideoTrack) {
+            localVideoTrack.stop();
+            localStream.removeTrack(localVideoTrack);
+
+            Object.values(peers).forEach(pc => {
+                const sender = pc.getSenders().find(s => s.track === localVideoTrack);
+                if (sender) pc.removeTrack(sender);
+            });
+
+            localVideoTrack = null;
+        }
+    }
+}
+
+function getPeerIdByPC(pc) {
+    return Object.keys(peers).find(k => peers[k] === pc);
+}
+
 // ======== Мониторинг речи ========
 function monitorSpeaking(peerId, stream) {
     if (speakingLoops[peerId]) return;
+
     const ctx = getAudioCtx();
     const analyser = ctx.createAnalyser();
     analyser.fftSize = 1024;
@@ -83,39 +106,31 @@ function monitorSpeaking(peerId, stream) {
 
     const data = new Uint8Array(analyser.fftSize);
     const high = 0.045, low = 0.020;
-    let speaking = false, aboveCount=0, belowCount=0, lastLog=0;
+    let speaking = false, aboveCount = 0, belowCount = 0, lastLog = 0;
 
     const peerDiv = () => document.getElementById("peer-" + peerId);
     const micIcon = () => document.getElementById("mic-" + peerId);
     const vuFill  = () => document.getElementById("vu-" + peerId);
 
-    function loop(ts){
+    function loop(ts) {
         analyser.getByteTimeDomainData(data);
         let sum = 0;
-        for(let i=0;i<data.length;i++){ const v=(data[i]-128)/128; sum+=v*v; }
+        for(let i=0; i<data.length; i++){ const v=(data[i]-128)/128; sum+=v*v; }
         const rms = Math.sqrt(sum/data.length);
         const level = Math.min(100, Math.round(rms*2200));
 
         const fill = vuFill();
         if(fill) fill.style.width = level+"%";
 
-        if(rms>high){ aboveCount++; belowCount=0; }
-        else if(rms<low){ belowCount++; aboveCount=0; }
+        if(!speaking && rms>high){ speaking=true; aboveCount=0; peerDiv()?.classList.add("talking"); if(micIcon()) micIcon().style.color="var(--success)"; }
+        else if(speaking && rms<low){ speaking=false; belowCount=0; peerDiv()?.classList.remove("talking"); if(micIcon()) micIcon().style.color="var(--text-muted)"; }
 
-        if(!speaking && aboveCount>=3){
-            speaking=true; peerDiv()?.classList.add("talking");
-            if(micIcon()) micIcon().style.color="var(--success)";
-        } else if(speaking && belowCount>=8){
-            speaking=false; peerDiv()?.classList.remove("talking");
-            if(micIcon()) micIcon().style.color="var(--text-muted)";
-        }
+        speakingLoops[peerId] = requestAnimationFrame(loop);
 
         if(window.DEBUG_SPEECH && ts-lastLog>200){
             lastLog=ts;
             console.debug(`[speaking] peer=${peerId} rms=${rms.toFixed(3)} level=${level}% speaking=${speaking}`);
         }
-
-        speakingLoops[peerId] = requestAnimationFrame(loop);
     }
 
     speakingLoops[peerId] = requestAnimationFrame(loop);
@@ -152,21 +167,23 @@ function handleTrack(peerId, event){
         addPeerUI(peerId, document.getElementById("peersList"));
     }
 
-    const audio = document.getElementById("audio-"+peerId);
     if(event.track.kind === "audio"){
+        const audio = document.getElementById("audio-"+peerId);
         audio.srcObject = stream;
         audio.autoplay = true;
         monitorSpeaking(peerId, stream);
     }
 
-    const video = document.getElementById("video-"+peerId);
-    if(event.track.kind === "video" && !video){
-        const v = document.createElement("video");
-        v.id = "video-"+peerId;
-        v.autoplay = true;
-        v.playsInline = true;
-        document.getElementById("peer-"+peerId).appendChild(v);
-        v.srcObject = stream;
+    if(event.track.kind === "video"){
+        let video = document.getElementById("video-"+peerId);
+        if(!video){
+            video = document.createElement("video");
+            video.id = "video-"+peerId;
+            video.autoplay = true;
+            video.playsInline = true;
+            document.getElementById("peer-"+peerId).appendChild(video);
+        }
+        video.srcObject = stream;
     }
 }
 
@@ -184,6 +201,7 @@ function addPeerUI(peerId, peersList, isLocal=false){
         </div>
         ${isLocal?`<div class="controls">
             <button id="mute-${peerId}">Выключить микрофон</button>
+            <video id="video-${peerId}" autoplay playsinline muted></video>
         </div>`:""}
     `;
     peersList.appendChild(div);
@@ -274,8 +292,8 @@ function leaveRoom(joinBtn, leaveBtn, roomInput){
 }
 
 async function sendOffer(peerId){
-    const pc=peers[peerId];
-    const offer=await pc.createOffer();
+    const pc = peers[peerId];
+    const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
-    ws?.send(JSON.stringify({...offer, to:peerId, from:clientId}));
+    ws?.send(JSON.stringify({...offer, to: peerId, from: clientId}));
 }
