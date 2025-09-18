@@ -201,7 +201,7 @@ function addPeerUI(peerId, peersList, isLocal=false){
             <div class="vu"><div class="fill" id="vu-${peerId}"></div></div>
         </div>
         ${isLocal?`<div class="controls">
-            <button id="mute-${peerId}">Выключить микрофон</button>
+            <button id="mute-${peerId}" class="mute">Выключить микрофон</button>
             <video id="video-${peerId}" autoplay playsinline muted></video>
         </div>`:""}
     `;
