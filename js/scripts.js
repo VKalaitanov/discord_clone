@@ -25,6 +25,7 @@ document.addEventListener("DOMContentLoaded", () => {
         videoEnabled = !videoEnabled;
         await toggleVideo(videoEnabled);
         videoBtn.textContent = videoEnabled ? "Выключить видео" : "Включить видео";
+        videoBtn.classList.toggle("active", videoEnabled);
     });
 });
 
@@ -215,6 +216,7 @@ function addPeerUI(peerId, peersList, isLocal=false){
             isMuted = !isMuted;
             localStream.getAudioTracks()[0].enabled = !isMuted;
             muteBtn.textContent = isMuted?"Включить микрофон":"Выключить микрофон";
+            muteBtn.classList.toggle("active", !isMuted);
         });
     }
 }
