@@ -123,17 +123,9 @@ function monitorSpeaking(peerId, stream) {
         const fill = vuFill();
         if(fill) fill.style.width = level+"%";
 
-        // if(!speaking && rms>high){ speaking=true; aboveCount=0; peerDiv()?.classList.add("talking"); if(micIcon()) micIcon().style.color="var(--success)"; }
-        // else if(speaking && rms<low){ speaking=false; belowCount=0; peerDiv()?.classList.remove("talking"); if(micIcon()) micIcon().style.color="var(--text-muted)"; }
+        if(!speaking && rms>high){ speaking=true; aboveCount=0; peerDiv()?.classList.add("talking"); if(micIcon()) micIcon().style.color="var(--success)"; }
+        else if(speaking && rms<low){ speaking=false; belowCount=0; peerDiv()?.classList.remove("talking"); if(micIcon()) micIcon().style.color="var(--text-muted)"; }
 
-        // заменяем использование micIcon.style.color
-        if(!speaking && rms>high){
-            speaking=true;
-            peerDiv()?.classList.add("talking");
-        } else if(speaking && rms<low){
-            speaking=false;
-            peerDiv()?.classList.remove("talking");
-        }
 
         speakingLoops[peerId] = requestAnimationFrame(loop);
 
