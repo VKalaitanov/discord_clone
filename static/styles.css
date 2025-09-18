@@ -76,9 +76,9 @@ button:active {
     width: 100%;
     max-width: 1024px;
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    justify-items: center; /* карточки по центру */
     justify-content: center;
 }
+
 
 .peer {
     position: relative;
@@ -87,13 +87,11 @@ button:active {
     padding: 16px;
     display: flex;
     flex-direction: column;
-    align-items: center;
+    align-items: stretch; /* растягиваем элементы по ширине карточки */
     gap: 10px;
     box-shadow: 0 4px 12px rgba(0,0,0,0.5);
-    transition: transform 0.2s, box-shadow 0.2s, width 0.3s, flex 0.3s;
-    width: 100%;
+    transition: transform 0.2s, box-shadow 0.2s;
     max-width: 300px;
-    flex: 1 1 auto;
 }
 
 .peer:hover {
@@ -106,6 +104,13 @@ button:active {
     font-weight: 500;
     text-align: center;
 }
+
+.info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
 
 .mic {
     font-size: 26px;
@@ -123,12 +128,11 @@ button:active {
 @keyframes mic-bounce { 0%,100% { transform: translateY(0) scale(1);} 50%{transform: translateY(-3px) scale(1.15);} }
 
 .vu {
-    width: 100%; /* растягиваем на всю карточку */
+    width: 100%; /* на всю ширину родителя .info */
     height: 10px;
     background: rgba(148,163,184,0.25);
     border-radius: 999px;
     overflow: hidden;
-    margin-top: 4px;
 }
 
 .vu .fill {
@@ -142,15 +146,15 @@ button:active {
 
 .peer button.mute,
 .peer button.video-btn {
+    width: 100%;
     padding: 6px 12px;
     font-size: 14px;
     border-radius: var(--radius);
-    color: #fff;
     font-weight: 600;
     cursor: pointer;
     margin-top: 6px;
-    transition: background 0.2s, transform 0.1s;
-    width: 100%;
+    border: none;
+    transition: background 0.2s;
 }
 
 .peer button.mute { background: var(--danger); }
