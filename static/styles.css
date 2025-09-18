@@ -6,7 +6,7 @@
     --primary: #3b82f6;
     --danger: #ef4444;
     --success: #22c55e;
-    --radius: 14px;
+    --radius: 12px;
 }
 
 body {
@@ -37,7 +37,7 @@ h2 {
 }
 
 input {
-    padding: 10px 14px;
+    padding: 8px 12px;
     border-radius: var(--radius);
     border: 1px solid var(--text-muted);
     background: var(--bg-card);
@@ -47,7 +47,7 @@ input {
 }
 
 button {
-    padding: 8px 14px;
+    padding: 6px 12px;
     border-radius: var(--radius);
     border: none;
     font-size: 14px;
@@ -67,7 +67,7 @@ button:active {
 
 #join { background: var(--primary); color: #fff; }
 #leave { background: var(--danger); color: #fff; }
-#video-toggle { background: var(--success); color: #fff; margin-bottom: 20px; }
+#video-toggle { background: var(--success); color: #fff; margin-bottom: 20px; padding: 6px 14px; font-size: 13px; }
 
 /* ===== Плитка участников ===== */
 #peersList {
@@ -76,23 +76,21 @@ button:active {
     width: 100%;
     max-width: 1024px;
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    justify-items: center; /* карточки по центру */
+    justify-content: center;
 }
 
 .peer {
     position: relative;
     background: var(--bg-card);
     border-radius: var(--radius);
-    padding: 16px;
+    padding: 14px;
     display: flex;
     flex-direction: column;
-    align-items: center;
+    align-items: stretch; /* растягиваем элементы */
     gap: 10px;
     box-shadow: 0 4px 12px rgba(0,0,0,0.5);
-    transition: transform 0.2s, box-shadow 0.2s, width 0.3s, flex 0.3s;
-    width: 100%;
+    transition: transform 0.2s, box-shadow 0.2s;
     max-width: 300px;
-    flex: 1 1 auto;
 }
 
 .peer:hover {
@@ -112,13 +110,21 @@ button:active {
     transition: color 0.2s, transform 0.2s;
 }
 
-.peer.talking { box-shadow: 0 0 0 2px rgba(34,197,94,1) inset, 0 0 22px 8px rgba(34,197,94,0.4);}
-.peer.talking .mic { color: var(--success); animation: mic-bounce 0.6s infinite; }
-@keyframes mic-bounce { 0%,100% { transform: translateY(0) scale(1);} 50%{transform: translateY(-3px) scale(1.15);} }
+.peer.talking {
+    box-shadow: 0 0 0 2px rgba(34,197,94,1) inset, 0 0 22px 8px rgba(34,197,94,0.4);
+}
+.peer.talking .mic {
+    color: var(--success);
+    animation: mic-bounce 0.6s infinite;
+}
+@keyframes mic-bounce {
+    0%,100% { transform: translateY(0) scale(1);}
+    50% { transform: translateY(-3px) scale(1.15);}
+}
 
 .vu {
     width: 100%; /* растягиваем на всю карточку */
-    height: 10px;
+    height: 8px;
     background: rgba(148,163,184,0.25);
     border-radius: 999px;
     overflow: hidden;
@@ -136,8 +142,8 @@ button:active {
 
 .peer button.mute,
 .peer button.video-btn {
-    padding: 6px 12px;
-    font-size: 14px;
+    padding: 4px 10px;
+    font-size: 13px;
     border-radius: var(--radius);
     color: #fff;
     font-weight: 600;
