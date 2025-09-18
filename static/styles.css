@@ -7,6 +7,8 @@
     --danger: #ef4444;
     --success: #22c55e;
     --radius: 14px;
+    --video-on: #22c55e;
+    --video-off: #ef4444;
 }
 
 body {
@@ -65,21 +67,9 @@ button:active {
     transform: scale(0.96);
 }
 
-#join {
-    background: var(--primary);
-    color: #fff;
-}
-
-#leave {
-    background: var(--danger);
-    color: #fff;
-}
-
-#video-toggle {
-    background: var(--primary);
-    color: #fff;
-    margin-bottom: 20px;
-}
+#join { background: var(--primary); color: #fff; }
+#leave { background: var(--danger); color: #fff; }
+#video-toggle { background: var(--video-on); color: #fff; margin-bottom: 20px; }
 
 /* ===== Плитка участников ===== */
 #peersList {
@@ -89,6 +79,7 @@ button:active {
     max-width: 1024px;
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
     justify-content: center;
+    justify-items: center; /* центрирует карточки */
 }
 
 .peer {
@@ -101,7 +92,10 @@ button:active {
     align-items: center;
     gap: 10px;
     box-shadow: 0 4px 12px rgba(0,0,0,0.5);
-    transition: transform 0.2s, box-shadow 0.2s;
+    transition: transform 0.2s, box-shadow 0.2s, width 0.3s, flex 0.3s;
+    width: 100%;
+    max-width: 300px; /* по умолчанию */
+    flex: 1 1 auto;
 }
 
 .peer:hover {
@@ -148,18 +142,11 @@ button:active {
     100% { transform: scale(1.25); opacity: 0; }
 }
 
-.peer.talking .mic {
-    color: var(--success);
-    animation: mic-bounce 0.6s infinite;
-}
-
-@keyframes mic-bounce {
-    0%, 100% { transform: translateY(0) scale(1); }
-    50% { transform: translateY(-3px) scale(1.15); }
-}
+.peer.talking .mic { color: var(--success); animation: mic-bounce 0.6s infinite; }
+@keyframes mic-bounce { 0%,100% { transform: translateY(0) scale(1);} 50%{transform: translateY(-3px) scale(1.15);} }
 
 .vu {
-    width: 100%;
+    width: 100%; /* теперь всегда на всю карточку */
     height: 10px;
     background: rgba(148,163,184,0.25);
     border-radius: 999px;
@@ -174,16 +161,15 @@ button:active {
     transition: width 0.06s linear;
 }
 
-.peer audio {
-    display: none; /* скрываем элемент, он нужен только для потока */
-}
+/* Скрываем аудио */
+.peer audio { display: none; }
 
-/* Кнопка микрофона внутри карточки */
+/* Кнопка микрофона */
 .peer button.mute {
     padding: 6px 12px;
     font-size: 14px;
     border-radius: var(--radius);
-    background: var(--primary);
+    background: var(--danger);
     color: #fff;
     font-weight: 600;
     cursor: pointer;
@@ -191,9 +177,9 @@ button:active {
     transition: background 0.2s, transform 0.1s;
 }
 
-.peer button.mute:hover {
-    background: #2563eb;
-}
+.peer button.mute.active { background: var(--success); }
+
+.peer button.mute:hover { opacity: 0.9; }
 
 /* Видео */
 .peer video {
@@ -204,20 +190,13 @@ button:active {
 
 /* ===== Адаптив ===== */
 @media (max-width: 600px) {
-    #peersList {
-        grid-template-columns: 1fr; /* стопка */
-        gap: 12px;
-    }
+    #peersList { grid-template-columns: 1fr; gap: 12px; }
 }
 
 @media (min-width: 601px) and (max-width: 900px) {
-    #peersList {
-        grid-template-columns: repeat(2, 1fr); /* максимум 2 в ряд */
-    }
+    #peersList { grid-template-columns: repeat(2, 1fr); }
 }
 
 @media (min-width: 901px) {
-    #peersList {
-        grid-template-columns: repeat(3, 1fr); /* максимум 3 в ряд */
-    }
+    #peersList { grid-template-columns: repeat(3, 1fr); }
 }
