@@ -4,30 +4,22 @@ let localStream = null;
 let localVideoTrack = null;
 let ws = null;
 let clientId = null;
-let videoEnabled = false;
 
 const peers = {};          // RTCPeerConnections
 const peerElements = {};   // DOM карточки участников
 const speakingLoops = {};  // Мониторинг речи
 
 document.addEventListener("DOMContentLoaded", () => {
-    const joinBtn  = document.getElementById("join");
+    const joinBtn = document.getElementById("join");
     const leaveBtn = document.getElementById("leave");
     const roomInput = document.getElementById("room");
     const peersList = document.getElementById("peersList");
-    const videoBtn = document.getElementById("video-toggle");
 
     joinBtn.addEventListener("click", () => joinRoom(roomInput, peersList, joinBtn, leaveBtn));
     leaveBtn.addEventListener("click", () => leaveRoom(joinBtn, leaveBtn, roomInput));
-
-    videoBtn.addEventListener("click", async () => {
-        if (!localStream) return;
-        videoEnabled = !videoEnabled;
-        await toggleVideo(videoEnabled);
-        videoBtn.textContent = videoEnabled ? "Выключить видео" : "Включить видео";
-    });
 });
 
+// ======== Аудио контекст ========
 let audioContext;
 function getAudioCtx() {
     if (!audioContext) {
@@ -36,11 +28,6 @@ function getAudioCtx() {
     }
     if (audioContext.state === "suspended") audioContext.resume();
     return audioContext;
-}
-
-function wsURL(roomId) {
-    const proto = location.protocol === "https:" ? "wss" : "ws";
-    return `${proto}://${location.host}/ws/${roomId}`;
 }
 
 // ======== Локальный поток ========
@@ -59,6 +46,7 @@ async function startLocalStream() {
 
 // ======== Видео ========
 async function toggleVideo(enable) {
+    if (!localStream) return;
     if (enable) {
         const newStream = await navigator.mediaDevices.getUserMedia({ video: true });
         localVideoTrack = newStream.getVideoTracks()[0];
@@ -71,9 +59,8 @@ async function toggleVideo(enable) {
             sendOffer(getPeerIdByPC(pc));
         });
 
-        const localVideoEl = document.getElementById("video-" + clientId);
-        if (localVideoEl) localVideoEl.srcObject = localStream;
-
+        const videoEl = document.getElementById("video-" + clientId);
+        if (videoEl) videoEl.srcObject = localStream;
     } else {
         if (localVideoTrack) {
             localVideoTrack.stop();
@@ -106,31 +93,25 @@ function monitorSpeaking(peerId, stream) {
 
     const data = new Uint8Array(analyser.fftSize);
     const high = 0.045, low = 0.020;
-    let speaking = false, aboveCount = 0, belowCount = 0, lastLog = 0;
+    let speaking = false;
 
     const peerDiv = () => document.getElementById("peer-" + peerId);
     const micIcon = () => document.getElementById("mic-" + peerId);
     const vuFill  = () => document.getElementById("vu-" + peerId);
 
-    function loop(ts) {
+    function loop() {
         analyser.getByteTimeDomainData(data);
         let sum = 0;
-        for(let i=0; i<data.length; i++){ const v=(data[i]-128)/128; sum+=v*v; }
+        for(let i=0;i<data.length;i++){ const v=(data[i]-128)/128; sum+=v*v; }
         const rms = Math.sqrt(sum/data.length);
-        const level = Math.min(100, Math.round(rms*2200));
 
         const fill = vuFill();
-        if(fill) fill.style.width = level+"%";
+        if(fill) fill.style.width = Math.min(100, Math.round(rms*2200)) + "%";
 
-        if(!speaking && rms>high){ speaking=true; aboveCount=0; peerDiv()?.classList.add("talking"); if(micIcon()) micIcon().style.color="var(--success)"; }
-        else if(speaking && rms<low){ speaking=false; belowCount=0; peerDiv()?.classList.remove("talking"); if(micIcon()) micIcon().style.color="var(--text-muted)"; }
+        if(!speaking && rms>high){ speaking=true; peerDiv()?.classList.add("talking"); if(micIcon()) micIcon().style.color="var(--success)"; }
+        else if(speaking && rms<low){ speaking=false; peerDiv()?.classList.remove("talking"); if(micIcon()) micIcon().style.color="var(--text-muted)"; }
 
         speakingLoops[peerId] = requestAnimationFrame(loop);
-
-        if(window.DEBUG_SPEECH && ts-lastLog>200){
-            lastLog=ts;
-            console.debug(`[speaking] peer=${peerId} rms=${rms.toFixed(3)} level=${level}% speaking=${speaking}`);
-        }
     }
 
     speakingLoops[peerId] = requestAnimationFrame(loop);
@@ -146,18 +127,13 @@ function stopMonitor(peerId){
 // ======== PeerConnection ========
 function createPeerConnection(peerId) {
     const pc = new RTCPeerConnection({ iceServers:[{urls:"stun:stun.l.google.com:19302"}] });
-
-    if(localStream){
-        localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
-    }
+    if(localStream) localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
 
     pc.onicecandidate = e=>{
         if(e.candidate) ws?.send(JSON.stringify({type:"candidate", candidate:e.candidate, to:peerId, from:clientId}));
     };
-
     pc.ontrack = e => handleTrack(peerId, e);
     pc.peerId = peerId;
-
     return pc;
 }
 
@@ -190,8 +166,10 @@ function handleTrack(peerId, event){
 // ======== UI ========
 function addPeerUI(peerId, peersList, isLocal=false){
     if(peerElements[peerId]) return;
+
     const div = document.createElement("div");
     div.className="peer"; div.id="peer-"+peerId;
+
     div.innerHTML=`
         <audio id="audio-${peerId}" autoplay playsinline ${isLocal?"muted":""}></audio>
         <div class="info">
@@ -199,11 +177,13 @@ function addPeerUI(peerId, peersList, isLocal=false){
             <span class="mic" id="mic-${peerId}">🎤</span>
             <div class="vu"><div class="fill" id="vu-${peerId}"></div></div>
         </div>
-        ${isLocal?`<div class="controls">
-            <button id="mute-${peerId}">Выключить микрофон</button>
-            <video id="video-${peerId}" autoplay playsinline muted></video>
+        ${isLocal?`<video id="video-${peerId}" autoplay playsinline muted></video>
+        <div class="controls">
+            <button id="mute-${peerId}" class="mic-btn">🎤</button>
+            <button id="video-btn-${peerId}" class="video-btn">🎥</button>
         </div>`:""}
     `;
+
     peersList.appendChild(div);
     peerElements[peerId]=div;
 
@@ -214,7 +194,17 @@ function addPeerUI(peerId, peersList, isLocal=false){
             if(!localStream) return;
             isMuted = !isMuted;
             localStream.getAudioTracks()[0].enabled = !isMuted;
-            muteBtn.textContent = isMuted?"Включить микрофон":"Выключить микрофон";
+            muteBtn.textContent = isMuted?"🔇":"🎤";
+            muteBtn.classList.toggle("muted", isMuted);
+        });
+
+        const videoBtn = document.getElementById("video-btn-"+peerId);
+        let videoOn = false;
+        videoBtn.addEventListener("click", async ()=>{
+            videoOn = !videoOn;
+            await toggleVideo(videoOn);
+            videoBtn.textContent = videoOn?"📷":"🎥";
+            videoBtn.classList.toggle("video-off", !videoOn);
         });
     }
 }
@@ -233,7 +223,7 @@ async function joinRoom(roomInput, peersList, joinBtn, leaveBtn){
     await startLocalStream();
     getAudioCtx();
 
-    ws = new WebSocket(wsURL(roomId));
+    ws = new WebSocket(`${location.protocol==='https:'?'wss':'ws'}://${location.host}/ws/${roomId}`);
     ws.onmessage = async evt=>{
         const msg = JSON.parse(evt.data);
         const {type, from, candidate} = msg;
@@ -241,19 +231,17 @@ async function joinRoom(roomInput, peersList, joinBtn, leaveBtn){
         if(type==="id"){
             clientId = msg.id;
             addPeerUI(clientId, peersList, true);
-            const localAudio = document.getElementById("audio-"+clientId);
-            if(localAudio) localAudio.srcObject = localStream;
+            document.getElementById("audio-"+clientId).srcObject = localStream;
             monitorSpeaking(clientId, localStream);
-
         } else if(type==="new-peer"){
-            const newId=msg.id;
+            const newId = msg.id;
             addPeerUI(newId, peersList);
             if(!peers[newId]){
-                peers[newId]=createPeerConnection(newId);
+                peers[newId] = createPeerConnection(newId);
                 sendOffer(newId);
             }
         } else if(type==="peer-left"){
-            const leftId=msg.id;
+            const leftId = msg.id;
             if(peers[leftId]) { peers[leftId].close(); delete peers[leftId]; }
             removePeerUI(leftId);
         } else if(!from || from===clientId) return;
@@ -270,8 +258,7 @@ async function joinRoom(roomInput, peersList, joinBtn, leaveBtn){
         } else if(type==="answer"){
             await pc.setRemoteDescription(new RTCSessionDescription(msg));
         } else if(type==="candidate"){
-            try{ await pc.addIceCandidate(new RTCIceCandidate(candidate)); }
-            catch(e){ console.error(e); }
+            try{ await pc.addIceCandidate(new RTCIceCandidate(candidate)); } catch(e){ console.error(e); }
         }
     };
 
@@ -281,11 +268,9 @@ async function joinRoom(roomInput, peersList, joinBtn, leaveBtn){
 function leaveRoom(joinBtn, leaveBtn, roomInput){
     if(ws){ ws.close(); ws=null; }
     if(localStream) { localStream.getTracks().forEach(t=>t.stop()); localStream=null; localVideoTrack=null; }
-
     Object.values(peers).forEach(pc=>pc.close());
     Object.keys(peers).forEach(k=>delete peers[k]);
     Object.keys(peerElements).forEach(removePeerUI);
-
     if(audioContext){ audioContext.close(); audioContext=null; }
 
     joinBtn.disabled=false; leaveBtn.disabled=true; roomInput.disabled=false;

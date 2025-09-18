@@ -109,8 +109,7 @@ button:active {
 }
 
 .mic {
-    font-size: 26px;
-    cursor: pointer;
+    font-size: 22px;
     transition: color 0.2s, transform 0.2s;
 }
 
@@ -153,7 +152,7 @@ button:active {
 
 .vu {
     width: 100%;
-    height: 10px;
+    height: 8px;
     background: rgba(148, 163, 184, 0.25);
     border-radius: 999px;
     overflow: hidden;
@@ -171,26 +170,48 @@ button:active {
     display: none; /* скрываем элемент, он нужен только для потока */
 }
 
-/* Кнопка микрофона внутри карточки */
-.peer button.mute {
-    padding: 6px 12px;
-    font-size: 14px;
+/* Видео внутри карточки */
+.peer video {
+    width: 100%;
+    max-height: 220px;
     border-radius: var(--radius);
+    object-fit: cover;
+    background: #000;
+}
+
+/* ===== Кнопки управления ===== */
+.peer .controls {
+    display: flex;
+    gap: 10px;
+    margin-top: 8px;
+}
+
+.peer .controls button {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    font-size: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
     background: var(--primary);
     color: #fff;
-    font-weight: 600;
-    cursor: pointer;
-    margin-top: 6px;
     transition: background 0.2s, transform 0.1s;
 }
 
-.peer button.mute:hover {
+.peer .controls button:hover {
     background: #2563eb;
 }
 
-@media (max-width: 600px) {
-    #peersList {
-        grid-template-columns: 1fr;
-        gap: 10px;
-    }
+.peer .controls button:active {
+    transform: scale(0.9);
+}
+
+.peer .controls button.muted {
+    background: var(--danger);
+}
+
+.peer .controls button.video-off {
+    background: var(--text-muted);
 }
