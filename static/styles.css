@@ -194,3 +194,8 @@ button:active {
         gap: 10px;
     }
 }
+
+video {
+    width: 80%;,
+    heighth: 80%;
+}
