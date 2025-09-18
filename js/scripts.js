@@ -25,7 +25,6 @@ document.addEventListener("DOMContentLoaded", () => {
         videoEnabled = !videoEnabled;
         await toggleVideo(videoEnabled);
         videoBtn.textContent = videoEnabled ? "Выключить видео" : "Включить видео";
-        videoBtn.classList.toggle("active", videoEnabled);
     });
 });
 
@@ -126,7 +125,6 @@ function monitorSpeaking(peerId, stream) {
         if(!speaking && rms>high){ speaking=true; aboveCount=0; peerDiv()?.classList.add("talking"); if(micIcon()) micIcon().style.color="var(--success)"; }
         else if(speaking && rms<low){ speaking=false; belowCount=0; peerDiv()?.classList.remove("talking"); if(micIcon()) micIcon().style.color="var(--text-muted)"; }
 
-
         speakingLoops[peerId] = requestAnimationFrame(loop);
 
         if(window.DEBUG_SPEECH && ts-lastLog>200){
@@ -202,7 +200,7 @@ function addPeerUI(peerId, peersList, isLocal=false){
             <div class="vu"><div class="fill" id="vu-${peerId}"></div></div>
         </div>
         ${isLocal?`<div class="controls">
-            <button id="mute-${peerId}" class="mute">Выключить микрофон</button>
+            <button id="mute-${peerId}">Выключить микрофон</button>
             <video id="video-${peerId}" autoplay playsinline muted></video>
         </div>`:""}
     `;
@@ -217,12 +215,7 @@ function addPeerUI(peerId, peersList, isLocal=false){
             isMuted = !isMuted;
             localStream.getAudioTracks()[0].enabled = !isMuted;
             muteBtn.textContent = isMuted?"Включить микрофон":"Выключить микрофон";
-            muteBtn.classList.toggle("active", !isMuted);
         });
-
-        // видео кнопка
-        const videoBtn = document.getElementById("video-toggle");
-        videoBtn.classList.remove("active"); // стартовое состояние
     }
 }
 
