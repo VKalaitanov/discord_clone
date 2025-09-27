@@ -187,7 +187,14 @@ function handleTrack(peerId, event){
     }
 }
 
-// ======== UI ========
+
+function updateGrid(peersList) {
+    const count = peersList.children.length;
+    let cols = Math.min(count, 4); // максимум 4 карточки в ряд
+    peersList.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+}
+
+// Вызываем после добавления/удаления участника
 function addPeerUI(peerId, peersList, isLocal=false){
     if(peerElements[peerId]) return;
 
@@ -226,15 +233,20 @@ function addPeerUI(peerId, peersList, isLocal=false){
             muteBtn.textContent = isMuted?"Включить микрофон":"Выключить микрофон";
         });
     }
+
+    updateGrid(peersList); // Обновляем сетку
 }
 
-
-function removePeerUI(peerId){
-    stopMonitor(peerId);
-    const div=peerElements[peerId];
-    if(div) div.remove();
-    delete peerElements[peerId];
+// Для удаления участника:
+function removePeerUI(peerId, peersList){
+    const div = peerElements[peerId];
+    if(div) {
+        div.remove();
+        delete peerElements[peerId];
+        updateGrid(peersList);
+    }
 }
+
 
 // ======== Join/Leave ========
 async function joinRoom(roomInput, peersList, joinBtn, leaveBtn){
