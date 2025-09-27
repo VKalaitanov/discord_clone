@@ -201,7 +201,7 @@ function addPeerUI(peerId, peersList, isLocal=false){
         </div>
         ${isLocal?`<div class="controls">
             <button id="mute-${peerId}">Выключить микрофон</button>
-            <video id="video-${peerId}" autoplay playsinline muted></video>
+            <video id="video-${peerId}" class="mirror" autoplay playsinline muted></video>
         </div>`:""}
     `;
     peersList.appendChild(div);
