@@ -15,4 +15,5 @@ def send_voice_call(phone: str, text: str):
     }
     headers = {"Content-Type": "application/json; charset=utf-8"}
     response = requests.post(SMS_AGENT_API_URL, json=payload, headers=headers)
+    print(response.json())
     return response.text
