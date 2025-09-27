@@ -1,3 +1,6 @@
+import os
+import requests
+
 SMS_AGENT_LOGIN = os.getenv("AGENT_LOGIN")
 SMS_AGENT_PASS = os.getenv("AGENT_PASSWORD")
 SMS_AGENT_API_URL = os.getenv("SMS_AGENT_API_URL")

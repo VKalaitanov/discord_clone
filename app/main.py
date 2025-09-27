@@ -4,6 +4,8 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
 from starlette.staticfiles import StaticFiles
 
+from .bot_call import send_voice_call
+
 contacts = {
     "Мама": {"phone": "+79612766626", "telegram_id": 123456789},
     "Папа": {"phone": "+79995554433", "telegram_id": 987654321},
@@ -28,10 +30,10 @@ async def index():
 
 @app.websocket("/ws/{room_id}")
 async def websocket_endpoint(websocket: WebSocket, room_id: str):
-    contact = contacts.get(room_id)
-    if contact:
-        text = f'{room_id}, зайди в голосовую комнату!'
-        send_voice_call(contact, text)
+    # contact = contacts.get(room_id)
+    # if contact:
+    #     text = f'{room_id}, зайди в голосовую комнату!'
+    #     send_voice_call(contact, text)
 
     await websocket.accept()
     client_id = str(uuid.uuid4())

@@ -203,7 +203,7 @@ button:active {
 
 .peer button.video-btn.active { background: var(--primary); }
 
-.peer video { width: 100%; height: auto; border-radius: 8px; }
+.peer video { width: 100%; height: auto; border-radius: 8px; transform: scaleX(-1);}
 
 .peer audio { display: none; }
 
