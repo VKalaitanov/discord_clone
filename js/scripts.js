@@ -18,7 +18,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const videoBtn = document.getElementById("video-toggle");
 
     joinBtn.addEventListener("click", () => joinRoom(roomInput, peersList, joinBtn, leaveBtn));
-    leaveBtn.addEventListener("click", () => leaveRoom(joinBtn, leaveBtn, roomInput));
+    leaveBtn.addEventListener("click", () => leaveRoom(joinBtn, leaveBtn, roomInput, peersList));
 
     videoBtn.addEventListener("click", async () => {
         if (!localStream) return;
@@ -300,17 +300,21 @@ async function joinRoom(roomInput, peersList, joinBtn, leaveBtn){
     joinBtn.disabled=true; leaveBtn.disabled=false; roomInput.disabled=true;
 }
 
-function leaveRoom(joinBtn, leaveBtn, roomInput){
+function leaveRoom(joinBtn, leaveBtn, roomInput, peersList){
     if(ws){ ws.close(); ws=null; }
     if(localStream) { localStream.getTracks().forEach(t=>t.stop()); localStream=null; localVideoTrack=null; }
 
     Object.values(peers).forEach(pc=>pc.close());
     Object.keys(peers).forEach(k=>delete peers[k]);
-    Object.keys(peerElements).forEach(removePeerUI);
+
+    // Исправлено: передаём peersList
+    Object.keys(peerElements).forEach(id => removePeerUI(id, peersList));
 
     if(audioContext){ audioContext.close(); audioContext=null; }
 
-    joinBtn.disabled=false; leaveBtn.disabled=true; roomInput.disabled=false;
+    joinBtn.disabled=false;
+    leaveBtn.disabled=true;
+    roomInput.disabled=false;
 }
 
 async function sendOffer(peerId){
