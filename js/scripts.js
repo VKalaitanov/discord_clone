@@ -190,26 +190,35 @@ function handleTrack(peerId, event){
 // ======== UI ========
 function addPeerUI(peerId, peersList, isLocal=false){
     if(peerElements[peerId]) return;
+
     const div = document.createElement("div");
-    div.className="peer"; div.id="peer-"+peerId;
-    div.innerHTML=`
+    div.className = "peer";
+    div.id = "peer-" + peerId;
+
+    div.innerHTML = `
         <audio id="audio-${peerId}" autoplay playsinline ${isLocal?"muted":""}></audio>
+
+        <div class="video-wrapper">
+            <video id="video-${peerId}" class="${isLocal?'mirror':''}" autoplay playsinline ${isLocal?'muted':''}></video>
+        </div>
+
         <div class="info">
             <span class="peer-id">${isLocal?"Вы":peerId}</span>
             <span class="mic" id="mic-${peerId}">🎤</span>
             <div class="vu"><div class="fill" id="vu-${peerId}"></div></div>
         </div>
+
         ${isLocal?`<div class="controls">
-            <button id="mute-${peerId}">Выключить микрофон</button>
-            <video id="video-${peerId}" class="mirror" autoplay playsinline muted></video>
+            <button id="mute-${peerId}" class="mute">Выключить микрофон</button>
         </div>`:""}
     `;
+
     peersList.appendChild(div);
-    peerElements[peerId]=div;
+    peerElements[peerId] = div;
 
     if(isLocal){
-        const muteBtn=document.getElementById("mute-"+peerId);
-        let isMuted=false;
+        const muteBtn = document.getElementById("mute-"+peerId);
+        let isMuted = false;
         muteBtn.addEventListener("click", ()=>{
             if(!localStream) return;
             isMuted = !isMuted;
@@ -218,6 +227,7 @@ function addPeerUI(peerId, peersList, isLocal=false){
         });
     }
 }
+
 
 function removePeerUI(peerId){
     stopMonitor(peerId);
