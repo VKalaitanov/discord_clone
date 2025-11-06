@@ -1,5 +1,6 @@
 window.DEBUG_SPEECH = true;
 
+
 let localStream = null;
 let localVideoTrack = null;
 let ws = null;

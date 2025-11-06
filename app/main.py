@@ -4,7 +4,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
 from starlette.staticfiles import StaticFiles
 
-from .bot_call import send_voice_call
+
 
 contacts = {
     "Мама": {"phone": "+79612766626", "telegram_id": 123456789},

@@ -213,6 +213,7 @@ video.mirror { transform: scaleX(-1); }
 /* ===== Скрываем аудио ===== */
 .peer audio { display: none; }
 
+
 /* ===== Адаптив ===== */
 @media (max-width: 1200px) { #peersList { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); } }
 @media (max-width: 900px)  { #peersList { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); } }
